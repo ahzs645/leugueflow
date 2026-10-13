@@ -82,6 +82,10 @@
 	gap: 1rem;
 }
 
+.leagueflow-team-card__media {
+	flex: 0 0 auto;
+}
+
 .leagueflow-meta-list {
 	list-style: none;
 	padding: 0;
