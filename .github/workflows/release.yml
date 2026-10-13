@@ -36,6 +36,7 @@ jobs:
           php -l uninstall.php
           php tests/github-updater.php
           php tests/admin-filters.php
+          php tests/admin-assets.php
 
   calendar:
     runs-on: ubuntu-24.04
