@@ -189,6 +189,7 @@
 			view: initialView,
 			date: new Date( initialDate.getFullYear(), initialDate.getMonth(), initialDate.getDate() ),
 			selectedDay: null,
+			fullMonth: false,
 			sport: '',
 			type: '',
 			search: '',
@@ -260,7 +261,7 @@
 				root.classList.add( 'is-view-month' );
 			}
 
-			if ( mobile && 'month' === state.view && ! state.selectedDay ) {
+			if ( mobile && 'month' === state.view && ! state.selectedDay && ! state.fullMonth ) {
 				state.selectedDay = defaultMobileMonthDay( source );
 			}
 		}
@@ -474,6 +475,7 @@
 				}
 
 				day.addEventListener( 'click', function () {
+					state.fullMonth = false;
 					state.selectedDay = state.selectedDay === this.dataset.day ? null : this.dataset.day;
 					state.date = parseDay( this.dataset.day );
 					render();
@@ -734,6 +736,8 @@
 		}
 
 		function shiftRange( amount ) {
+			state.fullMonth = false;
+
 			if ( 'month' === state.view ) {
 				state.date = new Date( state.date.getFullYear(), state.date.getMonth() + amount, 1 );
 				state.selectedDay = null;
@@ -748,10 +752,14 @@
 			render();
 		}
 
+		var dialogReturnFocus = null;
+
 		function openDialog( event ) {
 			if ( ! dialog || ! dialogContent ) {
 				return;
 			}
+
+			dialogReturnFocus = document.activeElement;
 
 			dialogContent.textContent = '';
 
@@ -834,15 +842,27 @@
 
 			dialog.hidden = false;
 			document.documentElement.classList.add( 'leagueflow-calendar-dialog-open' );
+
+			var closeControl = dialog.querySelector( '.leagueflow-calendar__dialog-close' );
+
+			if ( closeControl ) {
+				closeControl.focus();
+			}
 		}
 
 		function closeDialog() {
-			if ( ! dialog ) {
+			if ( ! dialog || dialog.hidden ) {
 				return;
 			}
 
 			dialog.hidden = true;
 			document.documentElement.classList.remove( 'leagueflow-calendar-dialog-open' );
+
+			if ( dialogReturnFocus && dialogReturnFocus.isConnected && dialogReturnFocus.focus ) {
+				dialogReturnFocus.focus();
+			}
+
+			dialogReturnFocus = null;
 		}
 
 		function googleCalendarUrl( event ) {
@@ -897,12 +917,14 @@
 
 		clearBtn.addEventListener( 'click', function () {
 			state.selectedDay = null;
+			state.fullMonth = true;
 			render();
 		} );
 
 		viewButtons.forEach( function ( control ) {
 			control.addEventListener( 'click', function () {
 				state.view = this.dataset.calendarView || 'month';
+				state.fullMonth = false;
 				state.selectedDay = 'day' === state.view ? dayKeyFromDate( state.date ) : null;
 				state.listCount = listInitial;
 				render();

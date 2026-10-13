@@ -33,7 +33,7 @@ class BuildTests(unittest.TestCase):
                 self.assertEqual(info.date_time, (2020, 1, 1, 0, 0, 0))
                 self.assertEqual(info.external_attr >> 16, 0o100644)
                 self.assertEqual(info.compress_type, ZIP_STORED)
-                self.assertEqual(z.read(info), (self.root / info.filename.removeprefix("leagueflow/")).read_bytes())
+                self.assertEqual(z.read(info), (self.root / info.filename[len("leagueflow/"):]).read_bytes())
         self.assertEqual(manifest["sha256"], hashlib.sha256(first.read_bytes()).hexdigest())
         self.assertEqual(manifest["version"], metadata(self.root)["version"])
         self.assertEqual(manifest["requires"], "6.5")
