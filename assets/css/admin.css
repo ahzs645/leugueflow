@@ -179,6 +179,11 @@
 	overflow-x: auto;
 }
 
+.leagueflow-table-scroll {
+	max-width: 100%;
+	overflow-x: auto;
+}
+
 .leagueflow-player-memberships {
 	min-width: 760px;
 }

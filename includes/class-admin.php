@@ -1297,6 +1297,7 @@ class Admin {
 			<?php endif; ?>
 			<?php $this->render_context_filters( $page, $competition_id, $season_id, $sport_slug, $league_level_id ); ?>
 
+			<div class="leagueflow-table-scroll" role="region" tabindex="0" aria-label="<?php esc_attr_e( 'Standings table', 'leagueflow' ); ?>">
 			<table class="widefat striped">
 				<thead>
 					<tr>
@@ -1333,6 +1334,7 @@ class Admin {
 				<?php endif; ?>
 				</tbody>
 			</table>
+			</div>
 		</div>
 		<?php
 	}
@@ -4356,7 +4358,7 @@ class Admin {
 
 		$page = $this->get_current_page_slug();
 
-		if ( preg_match( '/^leagueflow-sport-(.+?)(?:-(?:standings|brackets|fields))?$/', $page, $matches ) ) {
+		if ( preg_match( '/^leagueflow-sport-(.+?)(?:-(?:fixtures|standings|brackets|fields))?$/', $page, $matches ) ) {
 			return sanitize_key( $matches[1] );
 		}
 
