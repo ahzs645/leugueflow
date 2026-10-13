@@ -13,7 +13,7 @@ class BuildTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name) / "source"
-        shutil.copytree(ROOT, self.root, ignore=shutil.ignore_patterns(".git", "dist", "__pycache__"))
+        shutil.copytree(ROOT, self.root, ignore=shutil.ignore_patterns(".git", "dist", "__pycache__", "node_modules", ".DS_Store"))
 
     def tearDown(self):
         self.temp.cleanup()
@@ -72,6 +72,23 @@ class BuildTests(unittest.TestCase):
         link.unlink()
         directory = self.root / "includes" / "linked-dir"
         directory.symlink_to(self.root / "templates", target_is_directory=True)
+        with self.assertRaises(ValueError):
+            build(self.root)
+
+    def test_finder_metadata_is_excluded_without_accepting_links_or_hidden_directories(self):
+        archive, manifest = build(self.root, self.root / 'before-metadata')
+        baseline = archive.read_bytes()
+        metadata_file = self.root / 'blocks' / '.DS_Store'
+        metadata_file.write_bytes(b'Finder folder metadata')
+        archive, again = build(self.root, self.root / 'after-metadata')
+        self.assertEqual(archive.read_bytes(), baseline)
+        self.assertEqual(again, manifest)
+        metadata_file.unlink()
+        metadata_file.symlink_to(self.root / 'leagueflow.php')
+        with self.assertRaises(ValueError):
+            build(self.root)
+        metadata_file.unlink()
+        metadata_file.mkdir()
         with self.assertRaises(ValueError):
             build(self.root)
 

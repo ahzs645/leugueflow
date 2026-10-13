@@ -131,3 +131,12 @@ The isolated admin filter regression runs with `php tests/admin-filters.php`. It
 checks that join requests filter by sport/level metadata while team lists retain
 their taxonomy filters. CI runs it on PHP 8.1–8.4; the stubbed query fixture does
 not replace the local WordPress list-table acceptance check.
+
+Run `php tests/admin-assets.php` to verify that the plugin stylesheet loads on
+Placements, Fixtures, Utilities and the other supported admin screens without
+loading on unrelated WordPress screens. This source contract runs in the PHP CI
+matrix; use a real mobile page reload to verify the resulting layout.
+
+The canonical build ignores ordinary Finder `.DS_Store` files, so browsing the
+source on macOS does not break packaging. Hidden directories, credentials and
+symbolic links remain rejected; the metadata regression checks identical ZIP bytes.
