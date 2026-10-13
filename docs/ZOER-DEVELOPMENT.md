@@ -113,3 +113,16 @@ An empty console log from a provider that cannot capture console events is not
 evidence of no errors. Fix repository code, run the existing checks, import the
 reviewed patch, build, update the local plugin, and retest affected coverage before
 publishing anything.
+
+## Automated calendar regressions
+
+Run `npm ci && npm run test:calendar` for 27 source-level DOM checks across
+America/Vancouver, UTC and Asia/Tokyo. They exercise site wall-clock placement,
+calendar export instants, date labels, keyboard containment and focus restoration.
+The same checks gate releases in CI. They complement the real WordPress browser
+audit; jsdom supplies no actual rendering. Node manifests, test files and installed
+dependencies are excluded from both development and canonical runtime packages.
+
+The site's configured timezone controls labels and calendar export instants.
+Confirm that configuration separately before publishing real schedules; changing
+it is not part of a code-only local plugin update.
