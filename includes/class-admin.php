@@ -368,7 +368,7 @@ class Admin {
 			<?php if ( empty( $requests ) ) : ?>
 				<div class="notice notice-info inline"><p><?php echo esc_html( $focused_request_id ? __( 'This placement request is no longer pending.', 'leagueflow' ) : __( 'There are no pending placement requests.', 'leagueflow' ) ); ?></p></div>
 			<?php else : ?>
-				<table class="widefat striped">
+				<table class="widefat striped leagueflow-placements-table">
 					<thead>
 						<tr>
 							<th><?php esc_html_e( 'Player', 'leagueflow' ); ?></th>
@@ -380,6 +380,7 @@ class Admin {
 						<?php foreach ( $requests as $request ) : ?>
 							<?php
 							$player_id   = absint( get_post_meta( $request->ID, 'lf_player_id', true ) );
+							$has_player  = $player_id && 'lf_player' === get_post_type( $player_id );
 							$sport_slug  = sanitize_key( (string) get_post_meta( $request->ID, 'lf_sport_slug', true ) );
 							$level_id    = get_join_request_level_id( $request->ID );
 							$level       = $level_id ? get_term( $level_id, 'lf_league_level' ) : null;
@@ -415,8 +416,12 @@ class Admin {
 							?>
 							<tr id="leagueflow-placement-<?php echo esc_attr( (string) $request->ID ); ?>">
 								<td>
-									<strong><?php echo esc_html( get_the_title( $player_id ) ); ?></strong>
-									<?php if ( is_email( $email ) ) : ?><br /><a href="mailto:<?php echo esc_attr( $email ); ?>"><?php echo esc_html( $email ); ?></a><?php endif; ?>
+									<?php if ( $has_player ) : ?>
+										<strong><?php echo esc_html( get_the_title( $player_id ) ); ?></strong>
+									<?php else : ?>
+										<strong><?php echo esc_html( sprintf( __( 'Unknown player (request #%d)', 'leagueflow' ), $request->ID ) ); ?></strong>
+									<?php endif; ?>
+									<?php if ( $has_player && is_email( $email ) ) : ?><br /><a href="mailto:<?php echo esc_attr( $email ); ?>"><?php echo esc_html( $email ); ?></a><?php endif; ?>
 								</td>
 								<td>
 									<strong><?php echo esc_html( ! empty( $sport['label'] ) ? $sport['label'] : ucfirst( $sport_slug ) ); ?></strong><br />
@@ -428,14 +433,14 @@ class Admin {
 										<input type="hidden" name="action" value="leagueflow_assign_placement" />
 										<input type="hidden" name="lf_join_request_id" value="<?php echo esc_attr( (string) $request->ID ); ?>" />
 										<?php wp_nonce_field( 'leagueflow_assign_placement_' . $request->ID, 'leagueflow_placement_nonce' ); ?>
-										<select name="lf_team_id" required <?php disabled( empty( $teams ) ); ?>>
+										<select name="lf_team_id" required <?php disabled( empty( $teams ) || ! $has_player ); ?>>
 											<option value=""><?php esc_html_e( 'Choose a team', 'leagueflow' ); ?></option>
 											<?php foreach ( $teams as $team ) : ?>
 												<option value="<?php echo esc_attr( (string) $team->ID ); ?>"><?php echo esc_html( $team->post_title ); ?></option>
 											<?php endforeach; ?>
 										</select>
-										<button type="submit" class="button button-primary" <?php disabled( empty( $teams ) ); ?>><?php esc_html_e( 'Assign team', 'leagueflow' ); ?></button>
-										<?php if ( empty( $teams ) ) : ?><p class="description"><?php esc_html_e( 'No matching published teams are available.', 'leagueflow' ); ?></p><?php endif; ?>
+										<button type="submit" class="button button-primary" <?php disabled( empty( $teams ) || ! $has_player ); ?>><?php esc_html_e( 'Assign team', 'leagueflow' ); ?></button>
+										<?php if ( ! $has_player ) : ?><p class="description"><?php esc_html_e( 'The player profile for this request no longer exists.', 'leagueflow' ); ?></p><?php elseif ( empty( $teams ) ) : ?><p class="description"><?php esc_html_e( 'No matching published teams are available.', 'leagueflow' ); ?></p><?php endif; ?>
 									</form>
 								</td>
 							</tr>
@@ -481,6 +486,7 @@ class Admin {
 			'lf_team' !== $team->post_type ||
 			'publish' !== $team->post_status ||
 			! $player_id ||
+			'lf_player' !== get_post_type( $player_id ) ||
 			get_post_primary_term_slug( $team_id, 'lf_sport' ) !== $sport_slug ||
 			( $level_id && get_post_primary_term_id( $team_id, 'lf_league_level' ) !== $level_id )
 		) {
@@ -675,10 +681,10 @@ class Admin {
 					<h2><?php esc_html_e( 'Content Overview', 'leagueflow' ); ?></h2>
 					<table class="widefat striped">
 						<tbody>
-							<tr><td><?php esc_html_e( 'Teams', 'leagueflow' ); ?></td><td><?php echo esc_html( (string) $counts['teams']->publish ); ?></td></tr>
-							<tr><td><?php esc_html_e( 'Players', 'leagueflow' ); ?></td><td><?php echo esc_html( (string) $counts['players']->publish ); ?></td></tr>
-							<tr><td><?php esc_html_e( 'Matches', 'leagueflow' ); ?></td><td><?php echo esc_html( (string) $counts['matches']->publish ); ?></td></tr>
-							<tr><td><?php esc_html_e( 'Calendar Events', 'leagueflow' ); ?></td><td><?php echo esc_html( (string) $counts['calendar_events']->publish ); ?></td></tr>
+							<tr><td><?php esc_html_e( 'Teams', 'leagueflow' ); ?></td><td><?php echo esc_html( (string) $this->count_visible_posts( $counts['teams'] ) ); ?></td></tr>
+							<tr><td><?php esc_html_e( 'Players', 'leagueflow' ); ?></td><td><?php echo esc_html( (string) $this->count_visible_posts( $counts['players'] ) ); ?></td></tr>
+							<tr><td><?php esc_html_e( 'Matches', 'leagueflow' ); ?></td><td><?php echo esc_html( (string) $this->count_visible_posts( $counts['matches'] ) ); ?></td></tr>
+							<tr><td><?php esc_html_e( 'Calendar Events', 'leagueflow' ); ?></td><td><?php echo esc_html( (string) $this->count_visible_posts( $counts['calendar_events'] ) ); ?></td></tr>
 							<tr><td><?php esc_html_e( 'League Levels', 'leagueflow' ); ?></td><td><?php echo esc_html( (string) $counts['league_levels'] ); ?></td></tr>
 							<tr><td><?php esc_html_e( 'Competitions', 'leagueflow' ); ?></td><td><?php echo esc_html( (string) $counts['competitions'] ); ?></td></tr>
 							<tr><td><?php esc_html_e( 'Seasons', 'leagueflow' ); ?></td><td><?php echo esc_html( (string) $counts['seasons'] ); ?></td></tr>
@@ -2980,18 +2986,40 @@ class Admin {
 			$query->set( 'tax_query', $tax_query );
 		}
 
-		if ( $sport_slug && 'lf_join_request' === $post_type ) {
+		if ( 'lf_join_request' === $post_type ) {
+			// Join requests store sport and level in meta, not taxonomies. WordPress still
+			// registers the lf_sport/lf_league_level query vars in admin, so clear them to
+			// stop core adding a taxonomy clause no join request can match.
+			$query->set( 'lf_sport', '' );
+			$query->set( 'lf_league_level', '' );
+
 			$meta_query = $query->get( 'meta_query' );
 
 			if ( ! is_array( $meta_query ) ) {
 				$meta_query = array();
 			}
 
-			$meta_query[] = array(
-				'key'   => 'lf_sport_slug',
-				'value' => $sport_slug,
-			);
-			$query->set( 'meta_query', $meta_query );
+			if ( $sport_slug ) {
+				$meta_query[] = array(
+					'key'   => 'lf_sport_slug',
+					'value' => $sport_slug,
+				);
+			}
+
+			if ( $league_level_slug ) {
+				$level = get_term_by( 'slug', $league_level_slug, 'lf_league_level' );
+
+				$meta_query[] = array(
+					'key'     => 'lf_league_level_id',
+					'value'   => $level instanceof \WP_Term ? $level->term_id : 0,
+					'compare' => '=',
+					'type'    => 'NUMERIC',
+				);
+			}
+
+			if ( $meta_query ) {
+				$query->set( 'meta_query', $meta_query );
+			}
 		}
 
 		if ( 'lf_match' === $post_type && empty( $orderby ) ) {
@@ -4370,6 +4398,18 @@ class Admin {
 	}
 
 	/**
+	 * Count published and private posts from a wp_count_posts() result.
+	 *
+	 * Matches the statuses used by the per-sport overview so both dashboards agree.
+	 *
+	 * @param object $counts wp_count_posts() result.
+	 * @return int
+	 */
+	protected function count_visible_posts( $counts ) {
+		return (int) ( $counts->publish ?? 0 ) + (int) ( $counts->private ?? 0 );
+	}
+
+	/**
 	 * Get content counts for a sport.
 	 *
 	 * @param int $sport_id Sport term ID.
@@ -4401,7 +4441,7 @@ class Admin {
 				get_posts(
 					array(
 						'post_type'      => $post_type,
-						'post_status'    => 'any',
+						'post_status'    => array( 'publish', 'private' ),
 						'posts_per_page' => -1,
 						'fields'         => 'ids',
 						'tax_query'      => array(
@@ -4450,7 +4490,7 @@ class Admin {
 					get_posts(
 						array(
 							'post_type'      => $post_type,
-							'post_status'    => 'any',
+							'post_status'    => array( 'publish', 'private' ),
 							'posts_per_page' => -1,
 							'fields'         => 'ids',
 							'tax_query'      => array(
