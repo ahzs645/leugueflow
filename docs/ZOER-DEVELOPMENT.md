@@ -126,3 +126,8 @@ dependencies are excluded from both development and canonical runtime packages.
 The site's configured timezone controls labels and calendar export instants.
 Confirm that configuration separately before publishing real schedules; changing
 it is not part of a code-only local plugin update.
+
+The isolated admin filter regression runs with `php tests/admin-filters.php`. It
+checks that join requests filter by sport/level metadata while team lists retain
+their taxonomy filters. CI runs it on PHP 8.1–8.4; the stubbed query fixture does
+not replace the local WordPress list-table acceptance check.
