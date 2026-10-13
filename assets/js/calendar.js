@@ -29,6 +29,25 @@
 		return new Date( parseInt( parts[ 0 ], 10 ), parseInt( parts[ 1 ], 10 ) - 1, parseInt( parts[ 2 ], 10 ) );
 	}
 
+	// Event times are rendered in the site timezone, so lay them out by
+	// their wall-clock fields rather than converting to the viewer's zone.
+	function parseWallClock( value ) {
+		var match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/.exec( value || '' );
+
+		if ( ! match ) {
+			return new Date( value );
+		}
+
+		return new Date(
+			parseInt( match[ 1 ], 10 ),
+			parseInt( match[ 2 ], 10 ) - 1,
+			parseInt( match[ 3 ], 10 ),
+			parseInt( match[ 4 ], 10 ),
+			parseInt( match[ 5 ], 10 ),
+			parseInt( match[ 6 ] || '0', 10 )
+		);
+	}
+
 	function addDays( date, amount ) {
 		var next = new Date( date.getTime() );
 		next.setDate( next.getDate() + amount );
@@ -120,8 +139,10 @@
 		var strings = data.strings || {};
 		var sports = data.sports || [];
 		var events = ( data.events || [] ).map( function ( event ) {
-			event.startDate = new Date( event.start );
-			event.endDate = new Date( event.end );
+			event.startDate = parseWallClock( event.start );
+			event.endDate = parseWallClock( event.end );
+			event.startInstant = new Date( event.start );
+			event.endInstant = new Date( event.end );
 			event.searchText = [
 				event.title,
 				event.description,
@@ -793,7 +814,7 @@
 				details.appendChild( el( 'dd', null, value ) );
 			}
 
-			addDetail( strings.today || 'Date', formatDateKey( event.day, monthNames, weekdays ) );
+			addDetail( strings.date || 'Date', formatDateKey( event.day, monthNames, weekdays ) );
 			addDetail( 'Time', event.time + ' - ' + event.endTime );
 			addDetail( 'Venue', event.venue );
 			addDetail( strings.level || 'Level', event.leagueLevelLabel );
@@ -869,7 +890,7 @@
 			var url = new URL( 'https://calendar.google.com/calendar/render' );
 			url.searchParams.set( 'action', 'TEMPLATE' );
 			url.searchParams.set( 'text', 'match' === event.source ? event.home + ' vs ' + event.away : event.title );
-			url.searchParams.set( 'dates', formatIcsDate( event.startDate ) + '/' + formatIcsDate( event.endDate ) );
+			url.searchParams.set( 'dates', formatIcsDate( event.startInstant ) + '/' + formatIcsDate( event.endInstant ) );
 			url.searchParams.set( 'details', event.description || event.url || '' );
 
 			if ( event.venue ) {
@@ -887,8 +908,8 @@
 				'PRODID:-//LeagueFlow//Sports Calendar//EN',
 				'BEGIN:VEVENT',
 				'UID:' + event.id + '@leagueflow',
-				'DTSTART:' + formatIcsDate( event.startDate ),
-				'DTEND:' + formatIcsDate( event.endDate ),
+				'DTSTART:' + formatIcsDate( event.startInstant ),
+				'DTEND:' + formatIcsDate( event.endInstant ),
 				'SUMMARY:' + escapeIcsText( title ),
 				'DESCRIPTION:' + escapeIcsText( event.description || event.url || '' ),
 				event.venue ? 'LOCATION:' + escapeIcsText( event.venue ) : '',
@@ -977,8 +998,40 @@
 		document.addEventListener( 'keydown', function ( event ) {
 			if ( 'Escape' === event.key ) {
 				closeDialog();
+				return;
+			}
+
+			if ( 'Tab' === event.key && dialog && ! dialog.hidden ) {
+				trapDialogFocus( event );
 			}
 		} );
+
+		function trapDialogFocus( event ) {
+			var card = dialog.querySelector( '[role="dialog"]' ) || dialog;
+			var focusable = Array.prototype.filter.call(
+				card.querySelectorAll( 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])' ),
+				function ( node ) {
+					return node.offsetWidth > 0 || node.offsetHeight > 0 || node.getClientRects().length > 0;
+				}
+			);
+
+			if ( ! focusable.length ) {
+				event.preventDefault();
+				return;
+			}
+
+			var first = focusable[ 0 ];
+			var last = focusable[ focusable.length - 1 ];
+			var active = document.activeElement;
+
+			if ( event.shiftKey && ( active === first || ! card.contains( active ) ) ) {
+				event.preventDefault();
+				last.focus();
+			} else if ( ! event.shiftKey && ( active === last || ! card.contains( active ) ) ) {
+				event.preventDefault();
+				first.focus();
+			}
+		}
 
 		if ( 'day' === state.view ) {
 			state.selectedDay = dayKeyFromDate( state.date );
