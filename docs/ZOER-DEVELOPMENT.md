@@ -116,9 +116,13 @@ publishing anything.
 
 ## Automated calendar regressions
 
-Run `npm ci && npm run test:calendar` for 27 source-level DOM checks across
-America/Vancouver, UTC and Asia/Tokyo. They exercise site wall-clock placement,
-calendar export instants, date labels, keyboard containment and focus restoration.
+Run `npm ci && npm run test:calendar` for 63 source-level DOM checks (21 per
+timezone) across America/Vancouver, UTC and Asia/Tokyo. They exercise site
+wall-clock placement, calendar export instants, date labels, keyboard containment,
+focus restoration and Week/Day lanes for overlapping events
+(`tests/calendar-lanes.cjs`: two and three simultaneous events, a chained overlap,
+adjacent non-overlapping events, the same time on different days, per-event
+dialogs/links and search before layout; all synthetic data).
 The same checks gate releases in CI. They complement the real WordPress browser
 audit; jsdom supplies no actual rendering. Node manifests, test files and installed
 dependencies are excluded from both development and canonical runtime packages.
@@ -156,6 +160,11 @@ submitted text fields unchanged. It also posts the rendered team-creation and pl
 onboarding forms with invalid levels, sports, names, team choices and files, then one
 valid multipart team creation. Waivers/terms are not exercised. It does not
 test a browser, JavaScript, a production web server or physical devices.
+
+Run `php tests/asset-versions.php` to verify that `frontend.css`, `calendar.js`
+and `portal.js` are versioned by plugin version plus a content hash, so a
+development update with an unchanged plugin version is fetched fresh after a
+reload even if an installer keeps the package's fixed 2020-01-01 file dates.
 
 Run `php tests/admin-assets.php` to verify that the plugin stylesheet loads on
 Placements, Fixtures, Utilities and the other supported admin screens without
