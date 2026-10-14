@@ -247,13 +247,16 @@ $tests['POR-05 match availability'] = static function() use ( $u, $m_ab, $m_brec
 	lfp_assert( 'out' === \LeagueFlow\Availability::get_status( $p_p, $m_ab ) && 1 === \LeagueFlow\Availability::counts( $m_ab )['total'], 'Rejected availability changed responses.' );
 };
 
-$tests['POR-06 upload validation'] = static function() use ( $u, $team_a, $p_p, $level ) {
+$tests['POR-06 upload validation leaves profile and team unchanged'] = static function() use ( $u, $team_a, $p_p, $level ) {
 	$portal = new LFP_Portal( new \LeagueFlow\Renderer( new \LeagueFlow\Standings_Service(), new \LeagueFlow\Knockout_Service(), new \LeagueFlow\Sports_Manager() ) );
 	$png = base64_decode( 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==' );
 	$attachments = lfp_count( 'attachment' ); $thumb = get_post_thumbnail_id( $p_p );
 	$sports = array( 'lf_player_sports' => array( 'soccer' ), 'lf_player_sport_levels' => array( 'soccer' => $level['portal-competitive'] ), 'lf_player_description' => 'Own profile audit text' );
+	$profile = static function() use ( $p_p ) { return array( lfp_snapshot( array( $p_p ) ), wp_get_object_terms( $p_p, array( 'lf_sport', 'lf_league_level' ), array( 'fields' => 'ids' ) ) ); };
+	$profile_before = $profile();
 	foreach ( array( 'php-as-jpg' => lfp_file( 'avatar.jpg', '<?php echo "x"; ?>' ), 'php' => lfp_file( 'avatar.php', '<?php echo "x"; ?>' ), 'svg' => lfp_file( 'avatar.svg', '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>' ), 'html' => lfp_file( 'avatar.html', '<html></html>' ), 'ini-size' => lfp_file( 'avatar.png', '', UPLOAD_ERR_INI_SIZE ), 'partial' => lfp_file( 'avatar.png', $png, UPLOAD_ERR_PARTIAL ) ) as $label => $file ) {
-		lfp_expect( 'upload-error', lfp_submit( $u['player_p'], 'update_player_profile', $sports, 'valid', array( 'lf_player_photo' => $file ) ), "Player photo $label" );
+		lfp_expect( 'upload-error', lfp_submit( $u['player_p'], 'update_player_profile', array_merge( $sports, array( 'lf_player_description' => "Rejected upload text $label", 'lf_player_sport_levels' => array( 'soccer' => $level['portal-recreational'] ) ) ), 'valid', array( 'lf_player_photo' => $file ) ), "Player photo $label" );
+		lfp_assert( $profile_before === $profile(), "Rejected player photo $label still saved profile text, metadata or terms." );
 		wp_set_current_user( $u['player_p'] ); $_FILES = array( 'lf_player_photo' => $file );
 		$result = $portal->upload( 'lf_player_photo', $p_p ); $_FILES = array();
 		lfp_assert( is_wp_error( $result ), "Upload $label accepted." );
@@ -262,6 +265,9 @@ $tests['POR-06 upload validation'] = static function() use ( $u, $team_a, $p_p, 
 	$result = $portal->upload( 'lf_player_photo', $p_p ); $_FILES = array();
 	lfp_assert( is_wp_error( $result ) && false !== stripos( $result->get_error_message(), 'upload test' ), 'Valid PNG should pass type validation and stop only at the SAPI is_uploaded_file test.' );
 	lfp_expect( 'team-denied', lfp_submit( $u['captain_b'], 'update_team_profile', array( 'lf_team_id' => $team_a, 'lf_team_name' => 'X' ), 'valid', array( 'lf_team_logo' => lfp_file( 'logo.png', $png ) ) ), 'Logo upload for another team' );
+	$team_before = lfp_snapshot( array( $team_a ) );
+	lfp_expect( 'upload-error', lfp_submit( $u['captain_a'], 'update_team_profile', array( 'lf_team_id' => $team_a, 'lf_team_name' => 'Rejected logo rename', 'lf_team_description' => 'Rejected logo text', 'lf_short_name' => 'RLX' ), 'valid', array( 'lf_team_logo' => lfp_file( 'logo.svg', '<svg xmlns="http://www.w3.org/2000/svg"></svg>' ) ) ), 'Own team logo SVG' );
+	lfp_assert( $team_before === lfp_snapshot( array( $team_a ) ), 'Rejected team logo still saved the team name, description or short name.' );
 	lfp_assert( $attachments === lfp_count( 'attachment' ) && $thumb === get_post_thumbnail_id( $p_p ) && ! get_post_thumbnail_id( $team_a ), 'Rejected upload created an attachment or thumbnail.' );
 	$uploads = wp_upload_dir(); $stray = array();
 	foreach ( array( 'php', 'svg', 'html' ) as $ext ) { $stray = array_merge( $stray, (array) glob( trailingslashit( $uploads['path'] ) . 'avatar*.' . $ext ) ); }
@@ -312,6 +318,52 @@ $tests['POR-08 captain cannot learn names or hand entries to privileged accounts
 	wp_set_current_user( $editor->ID ); $portal->render_portal();
 	lfp_assert( array( $entry ) === array_map( 'intval', $claims( $editor->ID ) ), 'Editor could not claim an entry created by an account manager.' );
 	wp_set_current_user( $admin_id ); delete_post_meta( $entry, 'lf_user_id' ); delete_post_meta( $entry, 'lf_email' );
+};
+
+$tests['POR-09 team creation and onboarding permission/validation'] = static function() use ( $u, $sport, $level, $team_a, $team_b, $team_c, $team_rec, $team_draft, $page ) {
+	$creator = lfp_user( 'portal_creator', 'subscriber' ); $newbie = lfp_user( 'portal_newbie', 'subscriber' );
+	$blocked = wp_insert_user( array( 'user_login' => 'portal_blocked', 'user_pass' => wp_generate_password(), 'user_email' => 'portal_blocked@blocked.invalid', 'role' => 'subscriber' ) );
+	$state = static function() use ( $creator, $newbie ) { clean_user_cache( $creator ); clean_user_cache( $newbie ); return array( lfp_count( 'lf_team' ), lfp_count( 'lf_player' ), lfp_count( 'lf_join_request' ), lfp_count( 'attachment' ), get_userdata( $creator )->roles, get_userdata( $creator )->display_name, get_userdata( $newbie )->roles, get_userdata( $newbie )->display_name, count( $GLOBALS['lfp_mail'] ) ); };
+	$team_fields = array( 'lf_sport_slug' => 'soccer', 'lf_league_level_id' => $level['portal-competitive'], 'lf_team_name' => 'Portal Created Team', 'lf_captain_name' => 'Portal Creator Person', 'lf_short_name' => 'PCT' );
+	$before = $state();
+	$settings = get_option( 'leagueflow_settings' );
+	update_option( 'leagueflow_settings', array_merge( $settings, array( 'captain_registration_open' => 0 ) ) );
+	try { foreach ( array( 'create_team', 'complete_captain_onboarding' ) as $action ) { lfp_expect( 'registration-closed', lfp_submit( $creator, $action, $team_fields ), "$action while captain registration is closed" ); } }
+	finally { update_option( 'leagueflow_settings', $settings ); }
+	lfp_expect( 'access-denied', lfp_submit( $blocked, 'create_team', $team_fields ), 'Team creation by a non-registration email' );
+	foreach ( array(
+		'unknown sport' => array( 'lf_sport_slug' => 'quidditch' ), 'disabled sport' => array( 'lf_sport_slug' => 'hockey' ), 'empty team name' => array( 'lf_team_name' => '  ' ),
+		'empty captain name' => array( 'lf_captain_name' => '' ), 'login-code captain name' => array( 'lf_captain_name' => 'portal_creator' ), 'missing level' => array( 'lf_league_level_id' => 0 ),
+		'nonexistent level' => array( 'lf_league_level_id' => 999999 ), 'sport term as level' => array( 'lf_league_level_id' => $sport['soccer'] ),
+	) as $label => $override ) { lfp_expect( 'invalid-request', lfp_submit( $creator, 'create_team', array_merge( $team_fields, $override ) ), "Team creation with $label" ); }
+	lfp_expect( 'team-exists', lfp_submit( $creator, 'create_team', array_merge( $team_fields, array( 'lf_team_name' => 'Portal Team A' ) ) ), 'Duplicate team name in sport' );
+	lfp_expect( 'captain-sport-exists', lfp_submit( $u['captain_a'], 'create_team', array_merge( $team_fields, array( 'lf_team_name' => 'Portal Second Soccer Team' ) ) ), 'Captain creating a second team in a managed sport' );
+	lfp_expect( 'player-sport-exists', lfp_submit( $u['player_q'], 'create_team', array_merge( $team_fields, array( 'lf_team_name' => 'Portal Player Q Team', 'lf_captain_name' => 'Portal Player Q' ) ) ), 'Rostered player creating a team in the same sport' );
+	lfp_expect( 'upload-error', lfp_submit( $creator, 'create_team', $team_fields, 'valid', array( 'lf_team_logo' => lfp_file( 'logo.jpg', '<?php echo 1; ?>' ) ) ), 'Team creation with a rejected logo' );
+	lfp_assert( $before === $state() && ! get_posts( array( 'post_type' => 'lf_team', 'post_status' => 'any', 'title' => 'Portal Created Team', 'fields' => 'ids' ) ), 'Rejected team creation left a team, player, role, display name, attachment or mail.' );
+	foreach ( array( 'missing', 'invalid', 'wrong-action' ) as $mode ) { lfp_expect( 'invalid-request', lfp_submit( $creator, 'create_team', $team_fields, $mode ), "Team creation nonce mode $mode" ); }
+
+	// Player onboarding: validation and rollback before any join request or notification exists.
+	$join = array( 'lf_player_name' => 'Portal Newbie Person', 'lf_player_sports' => array( 'soccer' ), 'lf_player_sport_levels' => array( 'soccer' => $level['portal-competitive'] ), 'lf_player_team_choices' => array( 'soccer' => $team_a ) );
+	update_option( 'leagueflow_settings', array_merge( $settings, array( 'player_registration_open' => 0 ) ) );
+	try { lfp_expect( 'registration-closed', lfp_submit( $newbie, 'complete_player_onboarding', $join ), 'Player onboarding while registration is closed' ); }
+	finally { update_option( 'leagueflow_settings', $settings ); }
+	foreach ( array(
+		'name-setup-required' => array( 'empty name' => array( 'lf_player_name' => '' ), 'login-code name' => array( 'lf_player_name' => 'portal_newbie' ) ),
+		'sport-level-required' => array( 'no sport' => array( 'lf_player_sports' => array() ), 'disabled sport' => array( 'lf_player_sports' => array( 'hockey' ) ) ),
+		'invalid-request' => array( 'level outside the taxonomy' => array( 'lf_player_sport_levels' => array( 'soccer' => 999999 ) ) ),
+		'sport-request-required' => array( 'no team choice' => array( 'lf_player_team_choices' => array() ) ),
+		'team-level-mismatch' => array( 'team at another level' => array( 'lf_player_team_choices' => array( 'soccer' => $team_rec ) ), 'team in another sport' => array( 'lf_player_team_choices' => array( 'soccer' => $team_c ) ), 'draft team' => array( 'lf_player_team_choices' => array( 'soccer' => $team_draft ) ), 'page ID as team' => array( 'lf_player_team_choices' => array( 'soccer' => $page ) ), 'nonexistent team' => array( 'lf_player_team_choices' => array( 'soccer' => 999999 ) ) ),
+	) as $notice => $cases ) { foreach ( $cases as $label => $override ) { lfp_expect( $notice, lfp_submit( $newbie, 'complete_player_onboarding', array_merge( $join, $override ) ), "Player onboarding with $label" ); } }
+	lfp_expect( 'upload-error', lfp_submit( $newbie, 'complete_player_onboarding', $join, 'valid', array( 'lf_player_photo' => lfp_file( 'avatar.svg', '<svg xmlns="http://www.w3.org/2000/svg"></svg>' ) ) ), 'Player onboarding with a rejected photo' );
+	lfp_assert( $before === $state(), 'Rejected player onboarding left a player, join request, role, display name, attachment or mail.' );
+
+	// Positive anchor: the same valid team submission without a file creates exactly one owned team.
+	lfp_expect( 'team-registered', lfp_submit( $creator, 'create_team', $team_fields ), 'Valid team creation' );
+	$created = get_posts( array( 'post_type' => 'lf_team', 'post_status' => 'publish', 'title' => 'Portal Created Team', 'fields' => 'ids' ) ); clean_user_cache( $creator );
+	lfp_assert( 1 === count( $created ) && array( $creator ) === array_map( 'intval', (array) get_post_meta( $created[0], 'lf_manager_user_ids', true ) ) && in_array( 'leagueflow_team_manager', get_userdata( $creator )->roles, true ) && 'soccer' === \LeagueFlow\get_post_primary_term_slug( $created[0], 'lf_sport' ), 'Valid team creation did not produce one owned soccer team.' );
+	lfp_expect( 'team-denied', lfp_submit( $creator, 'update_team_profile', array( 'lf_team_id' => $team_b, 'lf_team_name' => 'Taken over' ) ), 'New captain editing another team' );
+	lfp_expect( 'captain-sport-exists', lfp_submit( $creator, 'create_team', array_merge( $team_fields, array( 'lf_team_name' => 'Portal Created Team Two' ) ) ), 'New captain repeating the same sport' );
 };
 
 $failures = array();
