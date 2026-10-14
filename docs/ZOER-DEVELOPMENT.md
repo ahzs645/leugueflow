@@ -138,7 +138,8 @@ WordPress 6.5 and latest. It fires the real portal `admin_post` handler with rea
 nonces and roles, captures the redirect notice, blocks outbound HTTP and captures
 mail. It covers roster add/remove, join requests and reviews, availability,
 own/other team and player edits, invalid nonces/IDs, duplicate submissions and
-upload type rejection. It is not an HTTP test. Never run it against the
+upload type rejection (rejected files leave profile/team text unchanged), plus
+team creation and player onboarding permission/validation paths. It is not an HTTP test. Never run it against the
 Intramurals database.
 
 `tests/wordpress-portal-http.php` is the HTTP counterpart, with the same
@@ -150,8 +151,10 @@ scrapes nonces from the rendered portal forms and posts to `wp-admin/admin-post.
 including multipart uploads. It covers own saves and reloads, forged cross-team
 posts, missing/forged/other-user/wrong-action nonces, roster add/remove, duplicate
 submits, join request/review, availability, malformed and privileged invites, and
-PNG upload success plus PHP/SVG/oversize rejection. Rejected uploads still save the
-form's text fields first; the test asserts that so a change is noticed. It does not
+PNG upload success plus PHP/SVG/oversize rejection. A rejected photo or logo leaves the
+submitted text fields unchanged. It also posts the rendered team-creation and player
+onboarding forms with invalid levels, sports, names, team choices and files, then one
+valid multipart team creation. Waivers/terms are not exercised. It does not
 test a browser, JavaScript, a production web server or physical devices.
 
 Run `php tests/admin-assets.php` to verify that the plugin stylesheet loads on

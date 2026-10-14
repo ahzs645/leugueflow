@@ -57,9 +57,9 @@ class LFH_Client {
 		lfh_assert( 200 === $r['status'], "Portal GET for {$this->label} returned HTTP {$r['status']}." ); return $r['body'];
 	}
 	/** Hidden fields of the first rendered portal form for $action whose hidden fields match $match (team workspace when $team is set). */
-	public function form( $action, $match = array(), $team = 0 ) {
+	public function form( $action, $match = array(), $team = 0, $query = '' ) {
 		$team = $team ?: ( $match['lf_team_id'] ?? 0 );
-		$html = $this->portal( $team ? 'leagueflow_view=teams&leagueflow_team=' . absint( $team ) : '' ); $seen = array();
+		$html = $this->portal( $team ? 'leagueflow_view=teams&leagueflow_team=' . absint( $team ) : $query ); $seen = array();
 		foreach ( lfh_forms( $html ) as $form ) {
 			$seen[] = ( $form['hidden']['leagueflow_portal_action'] ?? '?' ) . ( isset( $form['hidden']['lf_team_id'] ) ? '#' . $form['hidden']['lf_team_id'] : '' );
 			if ( ( $form['hidden']['leagueflow_portal_action'] ?? '' ) !== $action || array_diff_assoc( array_map( 'strval', $match ), $form['hidden'] ) ) { continue; }
@@ -131,7 +131,7 @@ try {
 	$settings = get_option( 'leagueflow_settings', array() ); $settings = is_array( $settings ) ? $settings : array();
 	update_option( 'leagueflow_settings', array_merge( $settings, array( 'player_registration_open' => 1, 'captain_registration_open' => 1 ) ) );
 	$u = array(); $pw = array(); $suffix = substr( md5( (string) microtime( true ) ), 0, 6 );
-	foreach ( array( 'admin' => 'administrator', 'captain_a' => 'leagueflow_team_manager', 'captain_b' => 'leagueflow_team_manager', 'player_p' => 'leagueflow_player', 'joiner' => 'leagueflow_player', 'joiner2' => 'leagueflow_player', 'invitee' => 'subscriber', 'editor' => 'editor' ) as $key => $role ) {
+	foreach ( array( 'admin' => 'administrator', 'captain_a' => 'leagueflow_team_manager', 'captain_b' => 'leagueflow_team_manager', 'player_p' => 'leagueflow_player', 'joiner' => 'leagueflow_player', 'joiner2' => 'leagueflow_player', 'invitee' => 'subscriber', 'editor' => 'editor', 'creator' => 'subscriber', 'newbie' => 'subscriber' ) as $key => $role ) {
 		$pw[ $key ] = wp_generate_password( 24, false );
 		$u[ $key ] = wp_insert_user( array( 'user_login' => "http_{$key}_{$suffix}", 'user_pass' => $pw[ $key ], 'user_email' => "http_{$key}_{$suffix}@example.test", 'role' => $role, 'display_name' => "HTTP {$key} display {$suffix}" ) );
 		lfh_assert( ! is_wp_error( $u[ $key ] ), "User fixture $key failed." );
@@ -281,30 +281,57 @@ try {
 		lfh_fresh(); lfh_assert( '' === \LeagueFlow\Availability::get_status( $p_p, $m_bc ), 'Foreign availability stored.' );
 	};
 
-	$tests['HTTP-08 multipart uploads and documented partial save'] = static function() use ( $c, $p_p, $team_a, $team_b, $level ) {
+	$tests['HTTP-08 multipart uploads; rejected files leave text unchanged'] = static function() use ( $c, $p_p, $team_a, $team_b, $level ) {
 		$png = base64_decode( 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==' );
 		$form = array_merge( $c['player_p']->form( 'update_player_profile' ), array( 'lf_player_sports' => array( 'soccer' ), 'lf_player_sport_levels' => array( 'soccer' => $level ) ) );
 		$attachments = lfh_count( 'attachment' );
 		lfh_expect( 'profile-saved', $c['player_p']->submit( array_merge( $form, array( 'lf_player_description' => 'HTTP profile with photo' ) ), array( 'lf_player_photo' => lfh_file( 'http-avatar.png', $png, 'image/png' ) ) ), 'Valid PNG upload' );
 		lfh_fresh(); $thumb = (int) get_post_thumbnail_id( $p_p );
 		lfh_assert( $attachments + 1 === lfh_count( 'attachment' ) && $thumb && 'image/png' === get_post_mime_type( $thumb ) && is_file( get_attached_file( $thumb ) ), 'Valid multipart PNG was not stored as the player photo.' );
-		$uploads = wp_upload_dir();
+		$uploads = wp_upload_dir(); $profile_before = lfh_snapshot( array( $p_p ) );
 		foreach ( array( 'php-as-png' => array( 'http-evil.png', '<?php echo 1; ?>', 'image/png' ), 'php' => array( 'http-evil.php', '<?php echo 1; ?>', 'application/x-php' ), 'svg' => array( 'http-evil.svg', '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>', 'image/svg+xml' ), 'oversize' => array( 'http-big.png', $png . str_repeat( "\0", 2500000 ), 'image/png' ) ) as $label => $file ) {
-			$text = "HTTP partial save $label";
+			$text = "HTTP rejected upload text $label";
 			lfh_expect( 'upload-error', $c['player_p']->submit( array_merge( $form, array( 'lf_player_description' => $text ) ), array( 'lf_player_photo' => lfh_file( $file[0], $file[1], $file[2] ) ) ), "Rejected upload $label" );
 			lfh_fresh();
 			lfh_assert( $attachments + 1 === lfh_count( 'attachment' ) && $thumb === (int) get_post_thumbnail_id( $p_p ), "Rejected upload $label created an attachment or replaced the photo." );
-			// Documented behaviour: text fields are saved before the image is validated.
-			lfh_assert( $text === get_post_field( 'post_content', $p_p ), "Partial-save behaviour changed for $label; update the documentation." );
+			// A rejected file must not leave a partial save of the submitted text fields.
+			lfh_assert( $profile_before === lfh_snapshot( array( $p_p ) ) && 'HTTP profile with photo' === get_post_field( 'post_content', $p_p ), "Rejected upload $label still saved the profile text." );
 		}
 		$stray = array(); foreach ( array( 'php', 'svg' ) as $ext ) { $stray = array_merge( $stray, (array) glob( trailingslashit( $uploads['basedir'] ) . '*/*/http-evil*.' . $ext ) ); }
 		lfh_assert( empty( $stray ), 'A rejected upload reached the uploads directory.' );
 		$b_form = $c['captain_b']->form( 'update_team_profile', array( 'lf_team_id' => $team_b ) );
 		lfh_expect( 'team-denied', $c['captain_b']->submit( array_merge( $b_form, array( 'lf_team_id' => $team_a, 'lf_team_name' => 'X' ) ), array( 'lf_team_logo' => lfh_file( 'http-logo-forged.png', $png, 'image/png' ) ) ), 'Forged logo upload for team A' );
 		lfh_fresh(); lfh_assert( $attachments + 1 === lfh_count( 'attachment' ) && ! get_post_thumbnail_id( $team_a ), 'Forged logo upload stored a file.' );
-		$a_form = $c['captain_a']->form( 'update_team_profile', array( 'lf_team_id' => $team_a ) );
+		$a_form = $c['captain_a']->form( 'update_team_profile', array( 'lf_team_id' => $team_a ) ); $team_before = lfh_snapshot( array( $team_a ) );
+		lfh_expect( 'upload-error', $c['captain_a']->submit( array_merge( $a_form, array( 'lf_team_name' => 'HTTP rejected logo rename', 'lf_team_description' => 'HTTP rejected logo text', 'lf_short_name' => 'RLX' ) ), array( 'lf_team_logo' => lfh_file( 'http-evil-logo.svg', '<svg xmlns="http://www.w3.org/2000/svg"></svg>', 'image/svg+xml' ) ) ), 'Own team SVG logo' );
+		lfh_assert( $team_before === lfh_snapshot( array( $team_a ) ) && ! get_post_thumbnail_id( $team_a ), 'Rejected team logo still saved the team text.' );
 		lfh_expect( 'team-saved', $c['captain_a']->submit( array_merge( $a_form, array( 'lf_team_name' => get_the_title( $team_a ) ) ), array( 'lf_team_logo' => lfh_file( 'http-logo.png', $png, 'image/png' ) ) ), 'Own team logo upload' );
 		lfh_fresh(); lfh_assert( get_post_thumbnail_id( $team_a ) && $attachments + 2 === lfh_count( 'attachment' ), 'Own team logo was not stored.' );
+	};
+
+	$tests['HTTP-09 team creation and player onboarding validation over HTTP'] = static function() use ( $c, $u, $team_a, $m_ab, $level, $suffix ) {
+		$png = base64_decode( 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==' );
+		$state = static function() use ( $u ) { lfh_fresh(); return array( lfh_count( 'lf_team' ), lfh_count( 'lf_player' ), lfh_count( 'lf_join_request' ), lfh_count( 'attachment' ), lfh_roles( $u['creator'] ), lfh_roles( $u['newbie'] ), get_userdata( $u['creator'] )->display_name, get_userdata( $u['newbie'] )->display_name, count( lfh_mail() ) ); };
+		$before = $state();
+		$cap = array_merge( $c['creator']->form( 'complete_captain_onboarding', array(), 0, 'leagueflow_path=captain' ), array( 'lf_sport_slug' => 'soccer', 'lf_league_level_id' => $level, 'lf_team_name' => "HTTP Created Team $suffix", 'lf_captain_name' => 'HTTP Creator Person', 'lf_short_name' => 'HCT' ) );
+		lfh_expect( 'upload-error', $c['creator']->submit( $cap, array( 'lf_team_logo' => lfh_file( 'http-evil-create.png', '<?php echo 1; ?>', 'image/png' ) ) ), 'Team creation with a PHP file named .png' );
+		lfh_expect( 'invalid-request', $c['creator']->submit( array_merge( $cap, array( 'lf_league_level_id' => 999999 ) ) ), 'Team creation with a nonexistent level' );
+		lfh_expect( 'invalid-request', $c['creator']->submit( array_merge( $cap, array( 'lf_sport_slug' => 'quidditch' ) ) ), 'Team creation with an unknown sport' );
+		lfh_expect( 'team-exists', $c['creator']->submit( array_merge( $cap, array( 'lf_team_name' => get_the_title( $team_a ) ) ) ), 'Team creation duplicating a team name' );
+		lfh_expect( 'invalid-request', $c['creator']->submit( array_merge( $cap, array( 'leagueflow_portal_action' => 'create_team' ) ) ), 'Captain-onboarding nonce replayed for create_team' );
+		lfh_expect( 'team-denied', $c['captain_a']->submit( array_merge( $c['captain_a']->form( 'update_team_profile', array( 'lf_team_id' => $team_a ) ), array( 'lf_team_id' => 0, 'lf_team_name' => 'X' ) ) ), 'Team profile save with a zero team ID' );
+		lfh_assert( $before === $state(), 'Rejected team creation left a team, player, role, display name, attachment or mail.' );
+		$join = array_merge( $c['newbie']->form( 'complete_player_onboarding', array(), 0, 'leagueflow_path=player' ), array( 'lf_player_name' => 'HTTP Newbie Person', 'lf_player_sports' => array( 'soccer' ), 'lf_player_sport_levels' => array( 'soccer' => $level ), 'lf_player_team_choices' => array( 'soccer' => $team_a ) ) );
+		lfh_expect( 'upload-error', $c['newbie']->submit( $join, array( 'lf_player_photo' => lfh_file( 'http-evil-join.svg', '<svg xmlns="http://www.w3.org/2000/svg"></svg>', 'image/svg+xml' ) ) ), 'Player onboarding with an SVG photo' );
+		lfh_expect( 'team-level-mismatch', $c['newbie']->submit( array_merge( $join, array( 'lf_player_team_choices' => array( 'soccer' => $m_ab ) ) ) ), 'Player onboarding naming a match as the team' );
+		lfh_expect( 'name-setup-required', $c['newbie']->submit( array_merge( $join, array( 'lf_player_name' => get_userdata( $u['newbie'] )->user_login ) ) ), 'Player onboarding with the login code as name' );
+		lfh_expect( 'sport-level-required', $c['newbie']->submit( array_merge( $join, array( 'lf_player_sports' => array( 'hockey' ) ) ) ), 'Player onboarding for a disabled sport' );
+		lfh_assert( $before === $state(), 'Rejected player onboarding left a player, join request, role, display name, attachment or mail.' );
+		// Positive anchor: the same form with a real PNG creates one owned team with a stored logo.
+		lfh_expect( 'team-registered', $c['creator']->submit( $cap, array( 'lf_team_logo' => lfh_file( 'http-created-logo.png', $png, 'image/png' ) ) ), 'Valid multipart team creation' );
+		lfh_fresh(); $created = get_posts( array( 'post_type' => 'lf_team', 'post_status' => 'publish', 'title' => "HTTP Created Team $suffix", 'fields' => 'ids' ) );
+		lfh_assert( 1 === count( $created ) && array( $u['creator'] ) === array_map( 'intval', (array) get_post_meta( $created[0], 'lf_manager_user_ids', true ) ) && 'image/png' === get_post_mime_type( (int) get_post_thumbnail_id( $created[0] ) ) && in_array( 'leagueflow_team_manager', lfh_roles( $u['creator'] ), true ), 'Valid team creation did not store one owned team with its PNG logo.' );
+		lfh_expect( 'captain-sport-exists', $c['creator']->submit( array_merge( $cap, array( 'lf_team_name' => "HTTP Created Team Two $suffix" ) ) ), 'Repeat team creation in the same sport' );
 	};
 
 	$failures = array();

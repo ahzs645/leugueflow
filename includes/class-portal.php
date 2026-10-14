@@ -1753,6 +1753,9 @@ class Portal {
 			$this->redirect_with_notice( 'sport-level-required' );
 		}
 
+		// Store the optional photo first so a rejected upload leaves the profile unchanged.
+		$this->maybe_save_uploaded_image( 'lf_player_photo', $player_id );
+
 		$post_data = array(
 			'ID'           => $player_id,
 			'post_content' => $description,
@@ -1769,7 +1772,6 @@ class Portal {
 			$this->sync_user_display_name( $user, $current_name );
 		}
 
-		$this->maybe_save_uploaded_image( 'lf_player_photo', $player_id );
 		$this->redirect_with_notice( $profile_setup_done ? 'profile-setup-complete' : 'profile-saved' );
 	}
 
@@ -2247,6 +2249,9 @@ class Portal {
 			$this->redirect_with_notice( 'invalid-request' );
 		}
 
+		// Store the optional logo first so a rejected upload leaves the team unchanged.
+		$this->maybe_save_uploaded_image( 'lf_team_logo', $team_id );
+
 		wp_update_post(
 			array(
 				'ID'           => $team_id,
@@ -2256,7 +2261,6 @@ class Portal {
 		);
 
 		update_post_meta( $team_id, 'lf_short_name', sanitize_text_field( wp_unslash( $_POST['lf_short_name'] ?? '' ) ) );
-		$this->maybe_save_uploaded_image( 'lf_team_logo', $team_id );
 		$this->redirect_with_notice( 'team-saved' );
 	}
 
