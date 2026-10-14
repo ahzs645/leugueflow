@@ -100,14 +100,18 @@ class Knockout_Service {
 				);
 			}
 
+			$home_team_id = (int) get_post_meta( $match->ID, 'lf_home_team_id', true );
+			$away_team_id = (int) get_post_meta( $match->ID, 'lf_away_team_id', true );
+
+			// get_the_title( 0 ) falls back to the global post (the page title), so empty slots must stay blank for the TBD label.
 			$rounds[ $round_label ]['matches'][] = array(
 				'id'             => $match->ID,
 				'title'          => $match->post_title,
 				'permalink'      => get_permalink( $match->ID ),
-				'home_team_id'   => (int) get_post_meta( $match->ID, 'lf_home_team_id', true ),
-				'away_team_id'   => (int) get_post_meta( $match->ID, 'lf_away_team_id', true ),
-				'home_team'      => get_the_title( (int) get_post_meta( $match->ID, 'lf_home_team_id', true ) ),
-				'away_team'      => get_the_title( (int) get_post_meta( $match->ID, 'lf_away_team_id', true ) ),
+				'home_team_id'   => $home_team_id,
+				'away_team_id'   => $away_team_id,
+				'home_team'      => $home_team_id ? get_the_title( $home_team_id ) : '',
+				'away_team'      => $away_team_id ? get_the_title( $away_team_id ) : '',
 				'home_score'     => get_post_meta( $match->ID, 'lf_home_score', true ),
 				'away_score'     => get_post_meta( $match->ID, 'lf_away_score', true ),
 				'status'         => get_post_meta( $match->ID, 'lf_status', true ),
