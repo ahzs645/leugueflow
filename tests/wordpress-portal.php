@@ -295,6 +295,25 @@ $tests['POR-07 captain cannot bind or promote other accounts'] = static function
 	lfp_assert( 1 === count( $claimed ) && \LeagueFlow\player_has_team( $claimed[0], $team_a ) && in_array( 'leagueflow_player', get_userdata( $u['invitee'] )->roles, true ) && '' !== $html, 'Invited account could not claim its own roster entry.' );
 };
 
+$tests['POR-08 captain cannot learn names or hand entries to privileged accounts'] = static function() use ( $u, $team_a, $admin_id ) {
+	$editor = get_userdata( $u['editor_victim'] ); $players = lfp_count( 'lf_player' );
+	lfp_expect( 'invalid-request', lfp_submit( $u['captain_a'], 'add_player', array( 'lf_team_id' => $team_a, 'lf_email' => $editor->user_email, 'lf_player_name' => '' ) ), 'Captain adding an existing account email without a name' );
+	lfp_assert( $players === lfp_count( 'lf_player' ) && ! get_posts( array( 'post_type' => 'lf_player', 'post_status' => 'any', 'title' => $editor->display_name, 'fields' => 'ids' ) ), 'Captain stored another account display name.' );
+	$portal = new LFP_Portal( new \LeagueFlow\Renderer( new \LeagueFlow\Standings_Service(), new \LeagueFlow\Knockout_Service(), new \LeagueFlow\Sports_Manager() ) );
+	$claims = static function( $user_id ) { return get_posts( array( 'post_type' => 'lf_player', 'post_status' => 'any', 'fields' => 'ids', 'meta_key' => 'lf_user_id', 'meta_value' => $user_id ) ); };
+	// Entry for the editor email created earlier by captain A (POR-07): the editor must not claim it.
+	wp_set_current_user( $editor->ID ); $portal->render_portal(); clean_user_cache( $editor->ID );
+	lfp_assert( ! $claims( $editor->ID ) && array( 'editor' ) === get_userdata( $editor->ID )->roles, 'Editor claimed a captain-created entry at portal sign-in.' );
+	// An entry authored by an account manager is still claimed by the matching privileged account.
+	wp_set_current_user( $admin_id );
+	$entry = lfp_post( 'lf_player', 'Portal Admin-made Editor Entry', 'private', $admin_id );
+	foreach ( get_posts( array( 'post_type' => 'lf_player', 'post_status' => 'any', 'fields' => 'ids', 'meta_key' => 'lf_email', 'meta_value' => $editor->user_email ) ) as $old ) { delete_post_meta( $old, 'lf_email' ); }
+	update_post_meta( $entry, 'lf_email', $editor->user_email );
+	wp_set_current_user( $editor->ID ); $portal->render_portal();
+	lfp_assert( array( $entry ) === array_map( 'intval', $claims( $editor->ID ) ), 'Editor could not claim an entry created by an account manager.' );
+	wp_set_current_user( $admin_id ); delete_post_meta( $entry, 'lf_user_id' ); delete_post_meta( $entry, 'lf_email' );
+};
+
 $failures = array();
 foreach ( $tests as $name => $test ) {
 	$_POST = array(); $_REQUEST = array(); $_FILES = array(); wp_set_current_user( $admin_id );
