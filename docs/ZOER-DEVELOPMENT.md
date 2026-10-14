@@ -165,3 +165,14 @@ matrix; use a real mobile page reload to verify the resulting layout.
 The canonical build ignores ordinary Finder `.DS_Store` files, so browsing the
 source on macOS does not break packaging. Hidden directories, credentials and
 symbolic links remain rejected; the metadata regression checks identical ZIP bytes.
+
+
+Saved match values use the WordPress site timezone. For the Intramurals local copy,
+existing game times were confirmed to mean Prince George/Vancouver time; its
+`timezone_string` is `America/Vancouver`. The shared card/admin formatter parses
+that wall-clock value in `wp_timezone()` before formatting it. It does not rewrite
+stored match records or titles. `php tests/match-datetime.php` covers summer and
+winter offsets, explicit UTC instants, PHP default-zone independence and invalid
+dates; the old formatter fails this fixture. Real Chromium timezone overrides in
+UTC, Vancouver and Tokyo all displayed October 15 at 6:30 pm, while Google/ICS
+exports encoded October 16 at 01:30 UTC. Physical-device acceptance remains pending.
