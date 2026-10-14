@@ -2277,9 +2277,11 @@ class Portal {
 			$this->redirect_with_notice( 'team-denied' );
 		}
 
-		$email = strtolower( sanitize_email( wp_unslash( $_POST['lf_email'] ?? '' ) ) );
+		$raw_email = trim( (string) wp_unslash( $_POST['lf_email'] ?? '' ) );
+		$email     = strtolower( sanitize_email( $raw_email ) );
 
-		if ( '' !== $email && ! is_email( $email ) ) {
+		// sanitize_email() returns '' for malformed input, so validate what was submitted.
+		if ( '' !== $raw_email && ! is_email( $email ) ) {
 			$this->redirect_with_notice( 'invalid-email' );
 		}
 
@@ -2347,9 +2349,11 @@ class Portal {
 			$this->redirect_with_notice( 'team-denied' );
 		}
 
-		$email = strtolower( sanitize_email( wp_unslash( $_POST['lf_email'] ?? '' ) ) );
+		$raw_email = trim( (string) wp_unslash( $_POST['lf_email'] ?? '' ) );
+		$email     = strtolower( sanitize_email( $raw_email ) );
 
-		if ( '' !== $email && ! is_email( $email ) ) {
+		// sanitize_email() returns '' for malformed input, so validate what was submitted.
+		if ( '' !== $raw_email && ! is_email( $email ) ) {
 			$this->redirect_with_notice( 'invalid-email' );
 		}
 
@@ -2433,7 +2437,11 @@ class Portal {
 
 			$linked_user = get_user_by( 'email', $email );
 
-			if ( $linked_user instanceof \WP_User ) {
+			// Only account managers may bind or promote another account, and never a privileged one.
+			// Otherwise the matching account claims this email-matched entry itself at portal sign-in.
+			if ( $linked_user instanceof \WP_User && (int) $linked_user->ID === $owner_id ) {
+				add_user_role_if_missing( $owner_id, 'leagueflow_player' );
+			} elseif ( $linked_user instanceof \WP_User && can_link_player_account( (int) $linked_user->ID ) ) {
 				update_post_meta( $player_id, 'lf_user_id', (int) $linked_user->ID );
 				add_user_role_if_missing( (int) $linked_user->ID, 'leagueflow_player' );
 			} else {

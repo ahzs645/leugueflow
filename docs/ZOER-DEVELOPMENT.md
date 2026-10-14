@@ -132,6 +132,16 @@ checks that join requests filter by sport/level metadata while team lists retain
 their taxonomy filters. CI runs it on PHP 8.1–8.4; the stubbed query fixture does
 not replace the local WordPress list-table acceptance check.
 
+`tests/wordpress-portal.php` runs only inside a disposable `http://leagueflow.test`
+WordPress with `LEAGUEFLOW_DISPOSABLE_WP=1`; CI runs it after the security suite on
+WordPress 6.5 and latest. It fires the real portal `admin_post` handler with real
+nonces and roles, captures the redirect notice, blocks outbound HTTP and captures
+mail. It covers roster add/remove, join requests and reviews, availability,
+own/other team and player edits, invalid nonces/IDs, duplicate submissions and
+upload type rejection. It is not an HTTP test: cookie login, `admin-post.php`
+routing and a successful multipart upload still need a browser or HTTP check on a
+disposable site. Never run it against the Intramurals database.
+
 Run `php tests/admin-assets.php` to verify that the plugin stylesheet loads on
 Placements, Fixtures, Utilities and the other supported admin screens without
 loading on unrelated WordPress screens. This source contract runs in the PHP CI

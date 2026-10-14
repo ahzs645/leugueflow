@@ -62,7 +62,8 @@ ZIP; increment the version instead. Branch and pull-request builds upload test
 artifacts but do not publish releases. No additional GitHub secrets are required.
 
 Native integration sets `LEAGUEFLOW_TEST_PACKAGE` to the built ZIP and runs
-`wp eval-file tests/wordpress-security.php`, followed by
+`wp eval-file tests/wordpress-security.php`, then
+`LEAGUEFLOW_DISPOSABLE_WP=1 wp eval-file tests/wordpress-portal.php`, followed by
 `wp eval-file tests/wordpress-update.php` on an isolated
 `http://leagueflow.test` installation with MySQL, PHP 8.2, WP-CLI, `zip`, `mysqli`
 and the built plugin activated. Controlled HTTP fixtures exercise real WordPress
