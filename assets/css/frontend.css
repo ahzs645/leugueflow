@@ -1494,6 +1494,13 @@ body:not(.home) .unbc-page-body > .wp-block-post-content > .leagueflow-portal.al
 	min-width: 0;
 }
 
+/* Week/Day grids have a fixed minimum width; scroll them inside the board
+   instead of letting the board's overflow clip the later days. */
+.leagueflow-calendar.is-view-week .leagueflow-calendar__stage,
+.leagueflow-calendar.is-view-day .leagueflow-calendar__stage {
+	overflow-x: auto;
+}
+
 .leagueflow-calendar__weekdays,
 .leagueflow-calendar__grid {
 	display: grid;
