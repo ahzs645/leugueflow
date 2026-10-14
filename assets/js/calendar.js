@@ -605,12 +605,71 @@
 			};
 		}
 
-		function buildTimedEventBlock( event, hourStart ) {
+		// Side-by-side lanes for events whose rendered blocks overlap in one day
+		// column. Blocks are compared by their drawn top/bottom (including the
+		// minimum block height), clustered while they keep overlapping, and each
+		// takes the first free lane; every block in a cluster shares its lane count.
+		// Blocks that only touch (one ends where the next starts) do not overlap.
+		function layoutTimedEvents( items, hourStart ) {
+			var slots = items.map( function ( event, index ) {
+				var pos = eventBlockPosition( event, hourStart );
+				return { event: event, index: index, top: pos.top, bottom: pos.top + pos.height, lane: 0, lanes: 1 };
+			} );
+			var ordered = slots.slice().sort( function ( a, b ) {
+				return ( a.top - b.top ) || ( b.bottom - a.bottom ) || ( a.index - b.index );
+			} );
+			var cluster = [];
+			var laneEnds = [];
+			var clusterEnd = -Infinity;
+
+			function closeCluster() {
+				cluster.forEach( function ( slot ) {
+					slot.lanes = laneEnds.length;
+				} );
+				cluster = [];
+				laneEnds = [];
+			}
+
+			ordered.forEach( function ( slot ) {
+				if ( cluster.length && slot.top >= clusterEnd ) {
+					closeCluster();
+				}
+
+				var lane = 0;
+				while ( lane < laneEnds.length && laneEnds[ lane ] > slot.top ) {
+					lane++;
+				}
+
+				laneEnds[ lane ] = slot.bottom;
+				slot.lane = lane;
+				cluster.push( slot );
+				clusterEnd = cluster.length > 1 ? Math.max( clusterEnd, slot.bottom ) : slot.bottom;
+			} );
+			closeCluster();
+
+			return slots;
+		}
+
+		function appendTimedEvents( column, items, hourStart ) {
+			layoutTimedEvents( items, hourStart ).forEach( function ( slot ) {
+				column.appendChild( buildTimedEventBlock( slot.event, hourStart, slot ) );
+			} );
+		}
+
+		function buildTimedEventBlock( event, hourStart, slot ) {
 			var pos = eventBlockPosition( event, hourStart );
 			var block = button( 'leagueflow-calendar__time-event' );
 			block.style.setProperty( '--lf-cal-accent', eventAccent( event ) );
 			block.style.top = pos.top + 'px';
 			block.style.height = pos.height + 'px';
+
+			if ( slot && slot.lanes > 1 ) {
+				block.classList.add( 'is-concurrent' );
+				block.style.setProperty( '--lf-cal-lane', String( slot.lane ) );
+				block.style.setProperty( '--lf-cal-lanes', String( slot.lanes ) );
+				block.setAttribute( 'data-lane', String( slot.lane ) );
+				block.setAttribute( 'data-lanes', String( slot.lanes ) );
+			}
 			block.appendChild( el( 'strong', null, 'match' === event.source ? event.home + ' vs ' + event.away : event.title ) );
 			block.appendChild( el( 'span', null, event.time + ' - ' + event.endTime ) );
 
@@ -669,9 +728,7 @@
 					dayCol.appendChild( el( 'div', 'leagueflow-calendar__hour-line' ) );
 				}
 
-				eventsForDay( dayKeyFromDate( date ), source ).forEach( function ( event ) {
-					dayCol.appendChild( buildTimedEventBlock( event, hours.start ) );
-				} );
+				appendTimedEvents( dayCol, eventsForDay( dayKeyFromDate( date ), source ), hours.start );
 
 				grid.appendChild( dayCol );
 			} );
@@ -693,9 +750,7 @@
 				dayCol.appendChild( el( 'div', 'leagueflow-calendar__hour-line' ) );
 			}
 
-			items.forEach( function ( event ) {
-				dayCol.appendChild( buildTimedEventBlock( event, hours.start ) );
-			} );
+			appendTimedEvents( dayCol, items, hours.start );
 
 			if ( ! items.length ) {
 				dayCol.appendChild( el( 'p', 'leagueflow-calendar__empty leagueflow-calendar__empty--time', strings.noEventsDay || 'No events on this day.' ) );

@@ -1846,6 +1846,19 @@ body:not(.home) .unbc-page-body > .wp-block-post-content > .leagueflow-portal.al
 	box-shadow: 0 6px 14px rgba(15, 35, 28, 0.08);
 }
 
+/* Overlapping events in one day column share it in lanes (set by calendar.js). */
+.leagueflow-calendar__time-event.is-concurrent {
+	right: auto;
+	left: calc(0.25rem + (100% - 0.5rem) * var(--lf-cal-lane, 0) / var(--lf-cal-lanes, 1));
+	width: calc((100% - 0.5rem) / var(--lf-cal-lanes, 1) - 2px);
+	padding-right: 0.35rem;
+	padding-left: 0.4rem;
+}
+
+.leagueflow-calendar__time-event:focus-visible {
+	z-index: 2;
+}
+
 .leagueflow-calendar__time-event strong,
 .leagueflow-calendar__time-event span {
 	display: block;

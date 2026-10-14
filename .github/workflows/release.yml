@@ -37,6 +37,7 @@ jobs:
           php tests/github-updater.php
           php tests/admin-filters.php
           php tests/admin-assets.php
+          php tests/asset-versions.php
           php tests/match-datetime.php
 
   calendar:
