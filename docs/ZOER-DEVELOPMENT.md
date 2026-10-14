@@ -124,7 +124,17 @@ focus restoration and Week/Day lanes for overlapping events
 adjacent non-overlapping events, the same time on different days, per-event
 dialogs/links and search before layout; all synthetic data).
 The same checks gate releases in CI. They complement the real WordPress browser
-audit; jsdom supplies no actual rendering. Node manifests, test files and installed
+audit; jsdom supplies no actual rendering. Live check on the local Intramurals
+copy (installed `4b12f09`, 2026-10-14, Playwright Chromium at 1440x900, logged
+out): the two simultaneous Sunday 5:30 pm matches render in two Week lanes and
+two Day lanes, each lane opens its own dialog and Details link, back-to-back
+Thursday matches stay full width, and List/Month keep 6:30 pm. Narrow Week lanes
+truncate team names; the dialog, Day and List views show them in full. Root's
+DOM readback (reported, not captured here) found the Week pair on one vertical
+interval with a 2px gap, and Day view at 768/390/320 with equal positive lane
+widths, 2px gaps and no page overflow; at 320 both lane buttons open the correct
+dialogs and Escape closes them. Week is intentionally not offered in the phone
+view controls. None of this is physical-device evidence. Node manifests, test files and installed
 dependencies are excluded from both development and canonical runtime packages.
 
 The site's configured timezone controls labels and calendar export instants.
