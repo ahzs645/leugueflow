@@ -1173,13 +1173,18 @@ function format_match_datetime( $datetime ) {
 		return '';
 	}
 
-	$timestamp = strtotime( $datetime );
-
-	if ( ! $timestamp ) {
+	// Saved match values are site wall-clock times, not PHP's default UTC.
+	try {
+		$date = new \DateTimeImmutable( $datetime, wp_timezone() );
+	} catch ( \Exception $error ) {
+		return '';
+	}
+	$errors = \DateTimeImmutable::getLastErrors();
+	if ( $errors && ( $errors['warning_count'] || $errors['error_count'] ) ) {
 		return '';
 	}
 
-	return wp_date( (string) get_setting( 'date_time_format', 'F j, Y g:i a' ), $timestamp );
+	return wp_date( (string) get_setting( 'date_time_format', 'F j, Y g:i a' ), $date->getTimestamp(), wp_timezone() );
 }
 
 /**
