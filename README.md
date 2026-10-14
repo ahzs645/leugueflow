@@ -63,10 +63,12 @@ artifacts but do not publish releases. No additional GitHub secrets are required
 
 Native integration sets `LEAGUEFLOW_TEST_PACKAGE` to the built ZIP and runs
 `wp eval-file tests/wordpress-security.php`, then
-`LEAGUEFLOW_DISPOSABLE_WP=1 wp eval-file tests/wordpress-portal.php`, followed by
+`LEAGUEFLOW_DISPOSABLE_WP=1 wp eval-file tests/wordpress-portal.php` and
+`tests/wordpress-portal-http.php`, followed by
 `wp eval-file tests/wordpress-update.php` on an isolated
-`http://leagueflow.test` installation with MySQL, PHP 8.2, WP-CLI, `zip`, `mysqli`
-and the built plugin activated. Controlled HTTP fixtures exercise real WordPress
+`http://leagueflow.test` installation with MySQL, PHP 8.2, WP-CLI, `zip`, `mysqli`,
+`curl`, `gd` and the built plugin activated. The portal HTTP program starts PHP's
+built-in server on `127.0.0.1` only (port `LEAGUEFLOW_HTTP_PORT`, default 8765). Controlled HTTP fixtures exercise real WordPress
 update hooks and `Plugin_Upgrader`: both checksum rejection without file changes
 and a successful next-version installation preserving active status and stored
 data. Local isolated tests supplement this integration; they do not certify every

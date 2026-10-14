@@ -2288,7 +2288,8 @@ class Portal {
 		$linked_user = get_user_by( 'email', $email );
 		$name        = sanitize_text_field( wp_unslash( $_POST['lf_player_name'] ?? '' ) );
 
-		if ( '' === $name && $linked_user instanceof \WP_User ) {
+		// Only account managers may see another account's display name; captains must type a name.
+		if ( '' === $name && $linked_user instanceof \WP_User && can_manage_player_accounts() ) {
 			$name = $linked_user->display_name;
 		}
 
@@ -2978,6 +2979,10 @@ class Portal {
 			if ( $owner_id && $owner_id !== (int) $user->ID ) {
 				return 0;
 			}
+			// A privileged account only claims an entry created by someone who could link it anyway.
+			if ( ! $owner_id && ! is_participant_account( $user ) && ! $this->player_author_can_link_accounts( $player_id ) ) {
+				return 0;
+			}
 			update_post_meta( $player_id, 'lf_user_id', (int) $user->ID );
 			add_user_role_if_missing( $user->ID, 'leagueflow_player' );
 			return $player_id;
@@ -3004,6 +3009,18 @@ class Portal {
 		}
 
 		return 0;
+	}
+
+	/**
+	 * Check whether a player's author manages player accounts.
+	 *
+	 * @param int $player_id Player ID.
+	 * @return bool
+	 */
+	protected function player_author_can_link_accounts( $player_id ) {
+		$author = get_userdata( (int) get_post_field( 'post_author', $player_id ) );
+
+		return $author instanceof \WP_User && user_can( $author, 'leagueflow_manage_player_accounts' ) && user_can( $author, 'edit_users' ) && user_can( $author, 'promote_users' );
 	}
 
 	/**
