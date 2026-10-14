@@ -31,14 +31,11 @@ class Assets {
 	 * @return void
 	 */
 	public function register_assets() {
-		$portal_script_path   = LEAGUEFLOW_PATH . 'assets/js/portal.js';
-		$calendar_script_path = LEAGUEFLOW_PATH . 'assets/js/calendar.js';
-
 		wp_register_style(
 			'leagueflow-frontend',
 			LEAGUEFLOW_URL . 'assets/css/frontend.css',
 			array(),
-			(string) filemtime( LEAGUEFLOW_PATH . 'assets/css/frontend.css' )
+			$this->asset_version( 'assets/css/frontend.css' )
 		);
 
 		wp_register_style(
@@ -67,7 +64,7 @@ class Assets {
 			'leagueflow-portal',
 			LEAGUEFLOW_URL . 'assets/js/portal.js',
 			array(),
-			file_exists( $portal_script_path ) ? (string) filemtime( $portal_script_path ) : LEAGUEFLOW_VERSION,
+			$this->asset_version( 'assets/js/portal.js' ),
 			true
 		);
 
@@ -75,9 +72,26 @@ class Assets {
 			'leagueflow-calendar',
 			LEAGUEFLOW_URL . 'assets/js/calendar.js',
 			array(),
-			file_exists( $calendar_script_path ) ? (string) filemtime( $calendar_script_path ) : LEAGUEFLOW_VERSION,
+			$this->asset_version( 'assets/js/calendar.js' ),
 			true
 		);
+	}
+
+	/**
+	 * Cache key for a frequently changed asset: plugin version plus a short
+	 * content hash. Packages stamp every file with the same date, so a
+	 * modification time only changes if the installer rewrites it; the hash
+	 * changes exactly when the file's bytes change, so a development update with
+	 * an unchanged plugin version is still fetched fresh after a reload.
+	 *
+	 * @param string $relative Path relative to the plugin directory.
+	 * @return string
+	 */
+	private function asset_version( $relative ) {
+		$path = LEAGUEFLOW_PATH . $relative;
+		$hash = is_readable( $path ) ? md5_file( $path ) : false;
+
+		return $hash ? LEAGUEFLOW_VERSION . '-' . substr( $hash, 0, 12 ) : LEAGUEFLOW_VERSION;
 	}
 
 	/**
@@ -104,6 +118,9 @@ class Assets {
 			'toplevel_page_leagueflow',
 			'leagueflow_page_leagueflow-sports',
 			'leagueflow_page_leagueflow-fields',
+			'leagueflow_page_leagueflow-fixtures',
+			'leagueflow_page_leagueflow-placements',
+			'leagueflow_page_leagueflow-utilities',
 			'leagueflow_page_leagueflow-standings',
 			'leagueflow_page_leagueflow-brackets',
 			'leagueflow_page_leagueflow-settings',

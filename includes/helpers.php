@@ -299,10 +299,17 @@ function can_manage_player_accounts() {
 /** Only low-privilege portal identities may be linked to player records. */
 function can_link_player_account( $user_id ) {
 	$user = get_user_by( 'id', absint( $user_id ) );
-	$roles = array( 'subscriber', 'leagueflow_player', 'leagueflow_team_manager' );
 	if ( ! can_manage_player_accounts() || ! $user instanceof \WP_User || $user->ID === get_current_user_id()
-		|| empty( $user->roles ) || array_diff( $user->roles, $roles ) || is_super_admin( $user->ID )
 		|| ! current_user_can( 'edit_user', $user->ID ) || ! current_user_can( 'promote_user', $user->ID ) ) {
+		return false;
+	}
+	return is_participant_account( $user );
+}
+
+/** True when an account holds only participant roles and capabilities. */
+function is_participant_account( $user ) {
+	$roles = array( 'subscriber', 'leagueflow_player', 'leagueflow_team_manager' );
+	if ( ! $user instanceof \WP_User || empty( $user->roles ) || array_diff( $user->roles, $roles ) || is_super_admin( $user->ID ) ) {
 		return false;
 	}
 	$allowed = array_merge( $roles, array( 'read', 'level_0', 'leagueflow_manage_profile', 'leagueflow_manage_team' ) );
@@ -1166,13 +1173,18 @@ function format_match_datetime( $datetime ) {
 		return '';
 	}
 
-	$timestamp = strtotime( $datetime );
-
-	if ( ! $timestamp ) {
+	// Saved match values are site wall-clock times, not PHP's default UTC.
+	try {
+		$date = new \DateTimeImmutable( $datetime, wp_timezone() );
+	} catch ( \Exception $error ) {
+		return '';
+	}
+	$errors = \DateTimeImmutable::getLastErrors();
+	if ( $errors && ( $errors['warning_count'] || $errors['error_count'] ) ) {
 		return '';
 	}
 
-	return wp_date( (string) get_setting( 'date_time_format', 'F j, Y g:i a' ), $timestamp );
+	return wp_date( (string) get_setting( 'date_time_format', 'F j, Y g:i a' ), $date->getTimestamp(), wp_timezone() );
 }
 
 /**

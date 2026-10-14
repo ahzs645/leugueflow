@@ -29,6 +29,25 @@
 		return new Date( parseInt( parts[ 0 ], 10 ), parseInt( parts[ 1 ], 10 ) - 1, parseInt( parts[ 2 ], 10 ) );
 	}
 
+	// Event times are rendered in the site timezone, so lay them out by
+	// their wall-clock fields rather than converting to the viewer's zone.
+	function parseWallClock( value ) {
+		var match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/.exec( value || '' );
+
+		if ( ! match ) {
+			return new Date( value );
+		}
+
+		return new Date(
+			parseInt( match[ 1 ], 10 ),
+			parseInt( match[ 2 ], 10 ) - 1,
+			parseInt( match[ 3 ], 10 ),
+			parseInt( match[ 4 ], 10 ),
+			parseInt( match[ 5 ], 10 ),
+			parseInt( match[ 6 ] || '0', 10 )
+		);
+	}
+
 	function addDays( date, amount ) {
 		var next = new Date( date.getTime() );
 		next.setDate( next.getDate() + amount );
@@ -120,8 +139,10 @@
 		var strings = data.strings || {};
 		var sports = data.sports || [];
 		var events = ( data.events || [] ).map( function ( event ) {
-			event.startDate = new Date( event.start );
-			event.endDate = new Date( event.end );
+			event.startDate = parseWallClock( event.start );
+			event.endDate = parseWallClock( event.end );
+			event.startInstant = new Date( event.start );
+			event.endInstant = new Date( event.end );
 			event.searchText = [
 				event.title,
 				event.description,
@@ -189,6 +210,7 @@
 			view: initialView,
 			date: new Date( initialDate.getFullYear(), initialDate.getMonth(), initialDate.getDate() ),
 			selectedDay: null,
+			fullMonth: false,
 			sport: '',
 			type: '',
 			search: '',
@@ -260,7 +282,7 @@
 				root.classList.add( 'is-view-month' );
 			}
 
-			if ( mobile && 'month' === state.view && ! state.selectedDay ) {
+			if ( mobile && 'month' === state.view && ! state.selectedDay && ! state.fullMonth ) {
 				state.selectedDay = defaultMobileMonthDay( source );
 			}
 		}
@@ -474,6 +496,7 @@
 				}
 
 				day.addEventListener( 'click', function () {
+					state.fullMonth = false;
 					state.selectedDay = state.selectedDay === this.dataset.day ? null : this.dataset.day;
 					state.date = parseDay( this.dataset.day );
 					render();
@@ -582,12 +605,71 @@
 			};
 		}
 
-		function buildTimedEventBlock( event, hourStart ) {
+		// Side-by-side lanes for events whose rendered blocks overlap in one day
+		// column. Blocks are compared by their drawn top/bottom (including the
+		// minimum block height), clustered while they keep overlapping, and each
+		// takes the first free lane; every block in a cluster shares its lane count.
+		// Blocks that only touch (one ends where the next starts) do not overlap.
+		function layoutTimedEvents( items, hourStart ) {
+			var slots = items.map( function ( event, index ) {
+				var pos = eventBlockPosition( event, hourStart );
+				return { event: event, index: index, top: pos.top, bottom: pos.top + pos.height, lane: 0, lanes: 1 };
+			} );
+			var ordered = slots.slice().sort( function ( a, b ) {
+				return ( a.top - b.top ) || ( b.bottom - a.bottom ) || ( a.index - b.index );
+			} );
+			var cluster = [];
+			var laneEnds = [];
+			var clusterEnd = -Infinity;
+
+			function closeCluster() {
+				cluster.forEach( function ( slot ) {
+					slot.lanes = laneEnds.length;
+				} );
+				cluster = [];
+				laneEnds = [];
+			}
+
+			ordered.forEach( function ( slot ) {
+				if ( cluster.length && slot.top >= clusterEnd ) {
+					closeCluster();
+				}
+
+				var lane = 0;
+				while ( lane < laneEnds.length && laneEnds[ lane ] > slot.top ) {
+					lane++;
+				}
+
+				laneEnds[ lane ] = slot.bottom;
+				slot.lane = lane;
+				cluster.push( slot );
+				clusterEnd = cluster.length > 1 ? Math.max( clusterEnd, slot.bottom ) : slot.bottom;
+			} );
+			closeCluster();
+
+			return slots;
+		}
+
+		function appendTimedEvents( column, items, hourStart ) {
+			layoutTimedEvents( items, hourStart ).forEach( function ( slot ) {
+				column.appendChild( buildTimedEventBlock( slot.event, hourStart, slot ) );
+			} );
+		}
+
+		function buildTimedEventBlock( event, hourStart, slot ) {
 			var pos = eventBlockPosition( event, hourStart );
 			var block = button( 'leagueflow-calendar__time-event' );
 			block.style.setProperty( '--lf-cal-accent', eventAccent( event ) );
 			block.style.top = pos.top + 'px';
 			block.style.height = pos.height + 'px';
+
+			if ( slot && slot.lanes > 1 ) {
+				block.classList.add( 'is-concurrent' );
+				block.style.setProperty( '--lf-cal-lane', String( slot.lane ) );
+				block.style.setProperty( '--lf-cal-lanes', String( slot.lanes ) );
+				block.setAttribute( 'data-lane', String( slot.lane ) );
+				block.setAttribute( 'data-lanes', String( slot.lanes ) );
+			}
 			block.appendChild( el( 'strong', null, 'match' === event.source ? event.home + ' vs ' + event.away : event.title ) );
 			block.appendChild( el( 'span', null, event.time + ' - ' + event.endTime ) );
 
@@ -646,9 +728,7 @@
 					dayCol.appendChild( el( 'div', 'leagueflow-calendar__hour-line' ) );
 				}
 
-				eventsForDay( dayKeyFromDate( date ), source ).forEach( function ( event ) {
-					dayCol.appendChild( buildTimedEventBlock( event, hours.start ) );
-				} );
+				appendTimedEvents( dayCol, eventsForDay( dayKeyFromDate( date ), source ), hours.start );
 
 				grid.appendChild( dayCol );
 			} );
@@ -670,9 +750,7 @@
 				dayCol.appendChild( el( 'div', 'leagueflow-calendar__hour-line' ) );
 			}
 
-			items.forEach( function ( event ) {
-				dayCol.appendChild( buildTimedEventBlock( event, hours.start ) );
-			} );
+			appendTimedEvents( dayCol, items, hours.start );
 
 			if ( ! items.length ) {
 				dayCol.appendChild( el( 'p', 'leagueflow-calendar__empty leagueflow-calendar__empty--time', strings.noEventsDay || 'No events on this day.' ) );
@@ -734,6 +812,8 @@
 		}
 
 		function shiftRange( amount ) {
+			state.fullMonth = false;
+
 			if ( 'month' === state.view ) {
 				state.date = new Date( state.date.getFullYear(), state.date.getMonth() + amount, 1 );
 				state.selectedDay = null;
@@ -748,10 +828,14 @@
 			render();
 		}
 
+		var dialogReturnFocus = null;
+
 		function openDialog( event ) {
 			if ( ! dialog || ! dialogContent ) {
 				return;
 			}
+
+			dialogReturnFocus = document.activeElement;
 
 			dialogContent.textContent = '';
 
@@ -785,7 +869,7 @@
 				details.appendChild( el( 'dd', null, value ) );
 			}
 
-			addDetail( strings.today || 'Date', formatDateKey( event.day, monthNames, weekdays ) );
+			addDetail( strings.date || 'Date', formatDateKey( event.day, monthNames, weekdays ) );
 			addDetail( 'Time', event.time + ' - ' + event.endTime );
 			addDetail( 'Venue', event.venue );
 			addDetail( strings.level || 'Level', event.leagueLevelLabel );
@@ -834,22 +918,34 @@
 
 			dialog.hidden = false;
 			document.documentElement.classList.add( 'leagueflow-calendar-dialog-open' );
+
+			var closeControl = dialog.querySelector( '.leagueflow-calendar__dialog-close' );
+
+			if ( closeControl ) {
+				closeControl.focus();
+			}
 		}
 
 		function closeDialog() {
-			if ( ! dialog ) {
+			if ( ! dialog || dialog.hidden ) {
 				return;
 			}
 
 			dialog.hidden = true;
 			document.documentElement.classList.remove( 'leagueflow-calendar-dialog-open' );
+
+			if ( dialogReturnFocus && dialogReturnFocus.isConnected && dialogReturnFocus.focus ) {
+				dialogReturnFocus.focus();
+			}
+
+			dialogReturnFocus = null;
 		}
 
 		function googleCalendarUrl( event ) {
 			var url = new URL( 'https://calendar.google.com/calendar/render' );
 			url.searchParams.set( 'action', 'TEMPLATE' );
 			url.searchParams.set( 'text', 'match' === event.source ? event.home + ' vs ' + event.away : event.title );
-			url.searchParams.set( 'dates', formatIcsDate( event.startDate ) + '/' + formatIcsDate( event.endDate ) );
+			url.searchParams.set( 'dates', formatIcsDate( event.startInstant ) + '/' + formatIcsDate( event.endInstant ) );
 			url.searchParams.set( 'details', event.description || event.url || '' );
 
 			if ( event.venue ) {
@@ -867,8 +963,8 @@
 				'PRODID:-//LeagueFlow//Sports Calendar//EN',
 				'BEGIN:VEVENT',
 				'UID:' + event.id + '@leagueflow',
-				'DTSTART:' + formatIcsDate( event.startDate ),
-				'DTEND:' + formatIcsDate( event.endDate ),
+				'DTSTART:' + formatIcsDate( event.startInstant ),
+				'DTEND:' + formatIcsDate( event.endInstant ),
 				'SUMMARY:' + escapeIcsText( title ),
 				'DESCRIPTION:' + escapeIcsText( event.description || event.url || '' ),
 				event.venue ? 'LOCATION:' + escapeIcsText( event.venue ) : '',
@@ -897,12 +993,14 @@
 
 		clearBtn.addEventListener( 'click', function () {
 			state.selectedDay = null;
+			state.fullMonth = true;
 			render();
 		} );
 
 		viewButtons.forEach( function ( control ) {
 			control.addEventListener( 'click', function () {
 				state.view = this.dataset.calendarView || 'month';
+				state.fullMonth = false;
 				state.selectedDay = 'day' === state.view ? dayKeyFromDate( state.date ) : null;
 				state.listCount = listInitial;
 				render();
@@ -955,8 +1053,40 @@
 		document.addEventListener( 'keydown', function ( event ) {
 			if ( 'Escape' === event.key ) {
 				closeDialog();
+				return;
+			}
+
+			if ( 'Tab' === event.key && dialog && ! dialog.hidden ) {
+				trapDialogFocus( event );
 			}
 		} );
+
+		function trapDialogFocus( event ) {
+			var card = dialog.querySelector( '[role="dialog"]' ) || dialog;
+			var focusable = Array.prototype.filter.call(
+				card.querySelectorAll( 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])' ),
+				function ( node ) {
+					return node.offsetWidth > 0 || node.offsetHeight > 0 || node.getClientRects().length > 0;
+				}
+			);
+
+			if ( ! focusable.length ) {
+				event.preventDefault();
+				return;
+			}
+
+			var first = focusable[ 0 ];
+			var last = focusable[ focusable.length - 1 ];
+			var active = document.activeElement;
+
+			if ( event.shiftKey && ( active === first || ! card.contains( active ) ) ) {
+				event.preventDefault();
+				last.focus();
+			} else if ( ! event.shiftKey && ( active === last || ! card.contains( active ) ) ) {
+				event.preventDefault();
+				first.focus();
+			}
+		}
 
 		if ( 'day' === state.view ) {
 			state.selectedDay = dayKeyFromDate( state.date );

@@ -1,12 +1,12 @@
 .leagueflow-admin-page .leagueflow-admin-grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+	grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
 	gap: 1rem;
 	margin-top: 1rem;
 }
 
 .leagueflow-admin-page .leagueflow-admin-grid--wide {
-	grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+	grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr));
 	align-items: start;
 }
 
@@ -165,7 +165,7 @@
 .leagueflow-form-table input[type="datetime-local"],
 .leagueflow-form-table input[type="date"],
 .leagueflow-form-table input[type="time"] {
-	min-width: 280px;
+	min-width: min(280px, 100%);
 	max-width: 100%;
 }
 
@@ -175,6 +175,11 @@
 }
 
 .leagueflow-player-memberships-wrap {
+	max-width: 100%;
+	overflow-x: auto;
+}
+
+.leagueflow-table-scroll {
 	max-width: 100%;
 	overflow-x: auto;
 }
@@ -214,6 +219,21 @@
 
 .leagueflow-player-memberships__add > span {
 	font-weight: 600;
+}
+
+.leagueflow-placements-table {
+	table-layout: fixed;
+}
+
+.leagueflow-placements-table td {
+	overflow-wrap: anywhere;
+}
+
+.leagueflow-placements-table select {
+	box-sizing: border-box;
+	width: 100%;
+	max-width: 100%;
+	margin-bottom: 6px;
 }
 
 .leagueflow-field-page .leagueflow-admin-card h2 {

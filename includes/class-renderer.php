@@ -500,6 +500,7 @@ class Renderer {
 				'allSports'      => __( 'All sports', 'leagueflow' ),
 				'allTypes'       => __( 'All types', 'leagueflow' ),
 				'today'          => __( 'Today', 'leagueflow' ),
+				'date'           => __( 'Date', 'leagueflow' ),
 				'month'          => __( 'Month', 'leagueflow' ),
 				'list'           => __( 'List', 'leagueflow' ),
 				'week'           => __( 'Week', 'leagueflow' ),

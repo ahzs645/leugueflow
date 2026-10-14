@@ -35,6 +35,23 @@ jobs:
           php -l leagueflow.php
           php -l uninstall.php
           php tests/github-updater.php
+          php tests/admin-filters.php
+          php tests/admin-assets.php
+          php tests/asset-versions.php
+          php tests/match-datetime.php
+
+  calendar:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Calendar timezone, date label and keyboard regressions
+        run: npm run test:calendar
 
   package:
     runs-on: ubuntu-24.04
@@ -84,12 +101,13 @@ jobs:
       - uses: shivammathur/setup-php@b604ade2a87db23f8871b7182e69ec5e75effb45 # v2
         with:
           php-version: '8.2'
-          extensions: mysqli, zip
+          extensions: mysqli, zip, curl, gd
           coverage: none
           tools: wp-cli
-      - name: Install disposable WordPress and exercise security and updates
+      - name: Install disposable WordPress and exercise security, portal writes, portal HTTP and updates
         env:
           WP_TEST_VERSION: ${{ matrix.wordpress }}
+          LEAGUEFLOW_DISPOSABLE_WP: '1'
         run: |
           python3 scripts/build.py
           wp_root="$RUNNER_TEMP/leagueflow-wordpress"
@@ -100,11 +118,13 @@ jobs:
           export LEAGUEFLOW_TEST_PACKAGE="$GITHUB_WORKSPACE/dist/leagueflow-$(python3 -c 'from scripts.build import metadata,ROOT; print(metadata(ROOT)["version"])').zip"
           wp plugin install "$LEAGUEFLOW_TEST_PACKAGE" --activate --path="$wp_root"
           wp eval-file "$GITHUB_WORKSPACE/tests/wordpress-security.php" --path="$wp_root"
+          wp eval-file "$GITHUB_WORKSPACE/tests/wordpress-portal.php" --path="$wp_root"
+          wp eval-file "$GITHUB_WORKSPACE/tests/wordpress-portal-http.php" --path="$wp_root"
           wp eval-file "$GITHUB_WORKSPACE/tests/wordpress-update.php" --path="$wp_root"
 
   publish:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [php, package, wordpress]
+    needs: [php, calendar, package, wordpress]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
