@@ -264,6 +264,19 @@ Shortcode attributes accept IDs or slugs where appropriate.
 
 ## REST API
 
+Third-party integrations can use the dedicated **match events** and **finished
+results** feeds:
+
+- `/wp-json/leagueflow/v1/match-events?per_page=10`
+- `/wp-json/leagueflow/v1/match-results?date=2026-10-31&per_page=20`
+
+They include public team identities/logos, sport, league level, competition,
+season, kickoff date/time/timezone, venue and result metadata. Date ranges,
+latest-first results, ID/slug filters and bounded pagination are supported.
+See [the public API guide](docs/PUBLIC-MATCH-API.md) for the complete contract,
+examples, polling guidance and privacy rules. These additive endpoints follow
+CampusManager's collection/metadata pattern and keep the older responses below.
+
 Public read-only endpoints are available under:
 
 - `/wp-json/leagueflow/v1/standings`

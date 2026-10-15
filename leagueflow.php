@@ -57,6 +57,7 @@ $leagueflow_files = array(
 	'includes/class-admin.php',
 	'includes/class-portal.php',
 	'includes/class-rest-controller.php',
+	'includes/class-public-matches-api.php',
 	'includes/class-shortcodes.php',
 	'includes/class-blocks.php',
 	'includes/class-template-loader.php',
