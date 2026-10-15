@@ -13,8 +13,11 @@ Status columns are separate on purpose:
   `fixture-browser` = local headless Chromium against the disposable site
   (layout only, not the live site).
 - **Applied**: installed on the local Intramurals copy through the reviewed
-  WordPress Manager development update and retested there. Empty until that
-  happens.
+  WordPress Manager development update (`ce16748`, job `4bede15b`, digest
+  `9e8483e5…41fa3`). `live LAxx` = rendered and checked in a native Playwright
+  Chromium browser on that copy (see "Installed-site acceptance"); `root live`
+  = root's own browser/DOM check; `installed` alone = installed but not
+  rechecked live (source and disposable-site tests only).
 
 ## Intended journey
 
@@ -440,67 +443,120 @@ Source changes after proposal `90cfa6a8`; tested on disposable sites only and
   empty. All of this is source plus disposable-site evidence; nothing here is
   installed on the Intramurals copy yet.
 
+## Polish after installed-site acceptance (source only, 2026-10-15)
+
+Implemented and tested on disposable sites; **not installed** on the
+Intramurals copy until root imports, builds and updates it. No data,
+capability, validation, version or updater-origin change.
+
+- **Match Sport row (L-01).** The help no longer promises a first-enabled
+  fallback (the code never had one after batch 1). It now says a match takes
+  its sport from the selected teams and, until then, from the sport the screen
+  was opened from; from All sports no sport is set until teams are chosen. A
+  match with no sport and no context shows "Not set yet" instead of "Soccer".
+- **Settings points row (L-02).** The win/draw/loss rows are a column whose
+  label takes the spare height, so the three inputs share a bottom line even
+  when "Points for a draw (tie)" wraps.
+- **Filter bars (L-03).** Every label in the Standings, Generate fixtures,
+  Brackets (shared `render_context_filters`), Requests, Setup mapping and slot
+  preview filter bars sits with its own control in a `leagueflow-filter-field`
+  group: side by side on wide screens, stacked label-above-control at 782 px
+  and below. Names, ids, values and GET parameters are unchanged.
+- **Venues buttons (L-04).** Add/Update Availability, Auto Schedule Matches and
+  Preview Slots have their own ids (`leagueflow-availability-submit`,
+  `leagueflow-schedule-submit`, `leagueflow-preview-slots-submit`); their
+  submitted `name="submit"` is unchanged.
+- **Venue availability list (L-05, found while testing this batch).** With at
+  least one availability rule the list table widened the page to 459 px at 390
+  and 320 (pre-existing; the live copy has no rules, so LA07 could not show
+  it). It now scrolls inside a labelled `leagueflow-table-scroll` region like
+  the other admin tables.
+- **Not changed (L-06).** Matches still use WordPress's classic Competitions and
+  Seasons tag boxes; typing a new name there creates a term with no sport.
+  Replacing them needs a sport-aware selector and is left for a later batch.
+
+Evidence (disposable `leagueflow.test` only, not live acceptance):
+`tests/wordpress-admin.php` ADM-16 (16 checks; the installed `ce16748` runtime
+fails 11 of them, the other 5 guard behaviour that must not change); full admin
+suite 378/378 on WordPress 7.1.3 and 6.5. Local headless Chromium against the
+configured fixture at 1440, 1280, 1024, 900, 390 and 320 (Settings, Brackets,
+Standings, Requests, Setup check, Venues with one rule, new match from All
+sports): 42/42 with the polished package, 9/42 with the `ce16748` package (on
+which the draw input sits 16 px lower at 1280/1024/900, labels are ungrouped,
+`submit` is duplicated, Venues is 459 px wide on phones, and the unscoped match
+says "Soccer"). PHP lint (51 files), asset-version, admin-asset, admin-filter
+and Python packaging tests pass. JS is unchanged, so calendar tests were not
+rerun; security/portal suites were not rerun (no change to those paths).
+
 ## Finding checklist
 
 Implemented = in maintained source on `codex/leagueflow-admin-workflow`.
 Tested = automated, on disposable `leagueflow.test` sites (WordPress 6.5 and
 7.1.3) unless marked otherwise. Applied = installed on the local Intramurals
-copy through the reviewed update **and** retested there; empty means not yet.
+copy through the reviewed update; the cell says whether and how it was
+retested there. A live render is not proof that a write action works: no
+decision, generation, mapping or save was submitted on the real site.
 
 | ID | Finding | Implemented | Tested | Applied |
 |---|---|---|---|---|
-| C-01 | Undated matches/events hidden by the default and date sorts; Trash showed 0 of 190 | batch 1 | ADM-01 (old code fails), fixture-browser | |
-| N-05 | Sort arrow on the publish Date column | batch 1 | ADM-01 header check | |
-| C-04 | Sport lists show all-sport status counts; links drop the sport | batch 1; readable-only counts after review B | ADM-02, ADM-07 (Author) | |
-| N-01 | Finished + blank score silently became 0–0; negative/decimal accepted | batch 1; no invented cap after review C | ADM-03 | |
-| N-03 | Blank "Select a sport" saved as the first enabled sport (also via Quick Edit) | batch 1 | ADM-04 | |
-| R-01 | One-click demo seeding could overwrite same-slug pages and real terms | batch 1; strict create-only after review A; sport terms reused untouched | ADM-06 (edits survive rerun; post-preview collision; renamed sport kept), mutation M13 | |
-| B-02 | Duplicate first-option captions | batch 1 | ADM-05 | |
-| N-04 | Membership No./Position inputs unnamed | batch 1 | ADM-05, fixture-browser | |
-| D-02 | Placements team selects unnamed | batch 1 (inbox Assign select labelled) | ADM-05, Expect audit (fixture) | |
-| D-01 | Placements Assign control escapes its table at 320 (root's fresh sweep found no page overflow) | batch 1 | fixture-browser | |
-| C-18 | Player edit 784px wide at 390/320 | batch 1 | fixture-browser (784 → 390/320) | |
-| C-19 | Sport Overview level table overflows at 320 | batch 1 | ADM-05 markup, fixture-browser | |
-| U-03 | Team Managers (274) / Linked User (272) unsearchable | batch 1 (filter box) | ADM-05 markup; fixture-browser | |
-| U-06 | Details far down on phones; duplicated level/sport boxes | batches 1–2 | fixture-browser; ADM-08 | |
-| S-01 | admin.css/editor.css/blocks.js cached by plugin version only | batch 1 | unit `tests/asset-versions.php` (old fails) | |
-| B-01 | Edit screens and Add New lose the sport context | batch 2 | ADM-08; fixture-browser | |
-| C-05 | Each sport's "League Levels" is the global list with cross-sport counts | batch 2 | ADM-08 | |
-| C-06 | Multi-sport players show another sport's team/level | batch 2 | ADM-08 | |
-| N-06 | Global Matches list has no menu entry | batch 2 | ADM-08 | |
-| C-11 | Empty states without next steps; Overview quick links incomplete | batches 2 and 4 (Setup check, attention item) | ADM-08, ADM-11 | |
-| C-14 | Utilities placeholder row ("Other Utilities": duplicate exporter row and an unimplemented "future utilities" row) | batch 2; documented in final UI batch | ADM-08 | |
-| C-10 | Empty term screens say "No tags found." | batch 2 | ADM-08 | |
-| C-02 | Roster adds leave matching join requests Pending | batch 3; explicit entry points after F1/F2 | ADM-09 (F1, F2, F6), POR-04 portal roster add; mutations M06, M09 | |
-| C-03 | Requests target trashed/missing teams; no flag or reviewed repair | batch 3; F3/F4 | ADM-09; mutations M10, M16 | |
-| U-01/U-02 | Named-team requests cannot be approved/declined; no status filter | batch 3; F2/F5/F6 | ADM-09; mutations M07, M08, M15 | |
-| C-12 | Placements global-only; orphan request cannot be dismissed | batch 3 | ADM-09 | |
-| C-07 | One global current season set from per-sport screens | batch 4 | ADM-10; mutation M02 | |
-| N-02 | Brackets "All seasons" resolves to the current season | batch 4 | ADM-10 (brackets render); mutation M01 | |
-| C-16 | Teams/matches without season/competition: validation and explicit mapping | batch 4 | ADM-11; mutation M04 | |
-| C-09 | No availability rules but scheduling enabled without a prerequisite | batch 5 | ADM-12, ADM-14; mutation M12 | |
-| U-05 | Fixture generation/standings mix levels by default | batch 5 | ADM-12, ADM-13; mutations M03, M14 | |
-| C-08 | Global soccer-worded scoring; D column for sports without draws | batch 5 | ADM-13; mutation M05 | |
-| C-13 | Availability/scheduling competition list mixes sports | batch 5 | ADM-14 | |
-| C-15 | `save_team_meta()` loads every player per team save | batch 5 | ADM-14; mutation M11 | |
-| P-01 | Published slugs stay stable (policy) | no change: drafts get their slug at first publish | ADM-12 (generated draft has no slug yet) | |
-| P-02 | Export default "Active published records only" (policy) | unchanged by design | — | |
-| G1 | No sport-description draw inference | review: already data-driven | ADM-13 | |
-| G2 | Requests keep division context; no fake season/competition filter for requests/players | final review | ADM-09 G2 | |
-| G3 | Trashed/auto-draft request records rejected inside locked checks | final review | ADM-09 G3 | |
-| G4 | Primary decision visible; secondary decisions in native `<details>` | final review | ADM-09 G4 | |
-| H1 | Request/generation locks accepted `NULL` as success | final review (fail closed) | ADM-09 H1, ADM-11 H5, ADM-12 H5 (NULL injection and held lock) | |
-| H2 | Omitted HTTP state token skipped the freshness check | final review | ADM-09 H2 (omitted/empty/forged/stale player/stale team; legacy form) | |
-| H3 | Authority/record state not re-checked after the lock | final review | ADM-09 H3 (trashed, status and capability changed while waiting) | |
-| H4 | Portal captain review outside the request lock | final review | ADM-09 H4; POR-04 (stateless, stale, staff-first, locked re-read); HTTP-06 (rendered token, removed token, stale page) | |
-| H5 | Mapping not serialized; term/insert errors ignored; incomplete partial result | final review | ADM-11 H5, ADM-12 H5 (conflicting previews, held/NULL lock, injected term and insert failures, early stop) | |
-| T-01 | Free-form sport entry (tag boxes, Quick Edit, block-editor panel, generic term screen); no safe team/event sport control | final UI batch | ADM-15 (selector, preselect, disabled/invented/blank refused, read-only, legacy multi/disabled/sportless kept, publish held as draft, nonce/capability, show_ui/Quick Edit/editor panel); mutations U-M2/M3/M4/M9/M10; fixture-browser (1440/390/320, publish blocked without sport, event sidebar) | |
-| T-02 | Default sport silently first enabled sport / Soccer | final UI batch | ADM-15 (player without context, disabled context); mutation U-M1 | |
-| T-03 | Settings checkboxes without id/label_for; three toggles said only "Enabled" | final UI batch | ADM-15 (all five checkboxes); mutation U-M6 | |
-| T-04 | Team Roster read-only dead end | final UI batch | ADM-15 (manage/add/list links, region, preselect only if editable, no write); mutations U-M7/U-M8 | |
-| T-05 | Team sidebar competition/season help inaccurate | final UI batch (text) | ADM-15 render; review | |
-| T-06 | Sport terms editable by anyone with manage_categories / created by edit_posts tag box | final UI batch | ADM-15 (Editor vs Administrator caps); mutation U-M5 | |
-| U-06b | Quick Edit and Calendar Event block-editor League Levels duplicated the details box | final UI batch | ADM-15 (Quick Edit filter, editor script per type); fixture-browser event sidebar | |
+| C-01 | Undated matches/events hidden by the default and date sorts; Trash showed 0 of 190 | batch 1 | ADM-01 (old code fails), fixture-browser | installed |
+| N-05 | Sort arrow on the publish Date column | batch 1 | ADM-01 header check | installed |
+| C-04 | Sport lists show all-sport status counts; links drop the sport | batch 1; readable-only counts after review B | ADM-02, ADM-07 (Author) | installed |
+| N-01 | Finished + blank score silently became 0–0; negative/decimal accepted | batch 1; no invented cap after review C | ADM-03 | installed |
+| N-03 | Blank "Select a sport" saved as the first enabled sport (also via Quick Edit) | batch 1 | ADM-04 | installed |
+| R-01 | One-click demo seeding could overwrite same-slug pages and real terms | batch 1; strict create-only after review A; sport terms reused untouched | ADM-06 (edits survive rerun; post-preview collision; renamed sport kept), mutation M13 | live LA08 (demo data off: environment production) |
+| B-02 | Duplicate first-option captions | batch 1 | ADM-05 | installed |
+| N-04 | Membership No./Position inputs unnamed | batch 1 | ADM-05, fixture-browser | live LA12 (jersey/position/captain/remove names) |
+| D-02 | Placements team selects unnamed | batch 1 (inbox Assign select labelled) | ADM-05, Expect audit (fixture) | installed; Assign select not rendered live (#1800 is Dismiss-only) |
+| D-01 | Placements Assign control escapes its table at 320 (root's fresh sweep found no page overflow) | batch 1 | fixture-browser | installed |
+| C-18 | Player edit 784px wide at 390/320 | batch 1 | fixture-browser (784 → 390/320) | live LA12 (390: 375 wide incl. scrollbar) |
+| C-19 | Sport Overview level table overflows at 320 | batch 1 | ADM-05 markup, fixture-browser | installed |
+| U-03 | Team Managers (274) / Linked User (272) unsearchable | batch 1 (filter box) | ADM-05 markup; fixture-browser | live LA12 (Linked User and Add-to-team filters) |
+| U-06 | Details far down on phones; duplicated level/sport boxes | batches 1–2 | fixture-browser; ADM-08 | live LA12, LA13 (details before Publish at 390/320) |
+| S-01 | admin.css/editor.css/blocks.js cached by plugin version only | batch 1 | unit `tests/asset-versions.php` (old fails) | installed |
+| B-01 | Edit screens and Add New lose the sport context | batch 2 | ADM-08; fixture-browser | live LA12, LA13 (Volleyball breadcrumb, back link, Add New) |
+| C-05 | Each sport's "League Levels" is the global list with cross-sport counts | batch 2 | ADM-08 | live LA01 (one "League Levels (all sports)" entry) |
+| C-06 | Multi-sport players show another sport's team/level | batch 2 | ADM-08 | installed |
+| N-06 | Global Matches list has no menu entry | batch 2 | ADM-08 | installed |
+| C-11 | Empty states without next steps; Overview quick links incomplete | batches 2 and 4 (Setup check, attention item) | ADM-08, ADM-11 | live LA01 (Needs attention), LA10, LA15 empty state |
+| C-14 | Utilities placeholder row ("Other Utilities": duplicate exporter row and an unimplemented "future utilities" row) | batch 2; documented in final UI batch | ADM-08 | root live (Utilities 320: real exporter, no placeholder) |
+| C-10 | Empty term screens say "No tags found." | batch 2 | ADM-08 | installed |
+| C-02 | Roster adds leave matching join requests Pending | batch 3; explicit entry points after F1/F2 | ADM-09 (F1, F2, F6), POR-04 portal roster add; mutations M06, M09 | installed |
+| C-03 | Requests target trashed/missing teams; no flag or reviewed repair | batch 3; F3/F4 | ADM-09; mutations M10, M16 | live LA02 (trashed/missing/other-level flags; no repair submitted) |
+| U-01/U-02 | Named-team requests cannot be approved/declined; no status filter | batch 3; F2/F5/F6 | ADM-09; mutations M07, M08, M15 | live LA02, LA03 (tabs, status filters, detail panel; no decision submitted) |
+| C-12 | Placements global-only; orphan request cannot be dismissed | batch 3 | ADM-09 | live LA03 (#1800 offers only Dismiss; not submitted) |
+| C-07 | One global current season set from per-sport screens | batch 4 | ADM-10; mutation M02 | live LA14 (Current column, per-sport checkbox; nothing saved) |
+| N-02 | Brackets "All seasons" resolves to the current season | batch 4 | ADM-10 (brackets render); mutation M01 | live LA04, LA05, LA15 (explicit All/Current options) |
+| C-16 | Teams/matches without season/competition: validation and explicit mapping | batch 4 | ADM-11; mutation M04 | live LA11 (validation table and mapping form; no preview/apply) |
+| C-09 | No availability rules but scheduling enabled without a prerequisite | batch 5 | ADM-12, ADM-14; mutation M12 | live LA07 (prerequisite notice, auto-schedule off) |
+| U-05 | Fixture generation/standings mix levels by default | batch 5 | ADM-12, ADM-13; mutations M03, M14 | live LA04 (level-scoped preview, duplicates counted; not generated), LA05 |
+| C-08 | Global soccer-worded scoring; D column for sports without draws | batch 5 | ADM-13; mutation M05 | live LA05 (no D column, set labels), LA08 scoring table |
+| C-13 | Availability/scheduling competition list mixes sports | batch 5 | ADM-14 | installed |
+| C-15 | `save_team_meta()` loads every player per team save | batch 5 | ADM-14; mutation M11 | installed |
+| P-01 | Published slugs stay stable (policy) | no change: drafts get their slug at first publish | ADM-12 (generated draft has no slug yet) | installed |
+| P-02 | Export default "Active published records only" (policy) | unchanged by design | — | installed |
+| G1 | No sport-description draw inference | review: already data-driven | ADM-13 | installed |
+| G2 | Requests keep division context; no fake season/competition filter for requests/players | final review | ADM-09 G2 | live LA02 (Level filter) |
+| G3 | Trashed/auto-draft request records rejected inside locked checks | final review | ADM-09 G3 | installed |
+| G4 | Primary decision visible; secondary decisions in native `<details>` | final review | ADM-09 G4 | live LA03 ("Other decisions" disclosure) |
+| H1 | Request/generation locks accepted `NULL` as success | final review (fail closed) | ADM-09 H1, ADM-11 H5, ADM-12 H5 (NULL injection and held lock) | installed |
+| H2 | Omitted HTTP state token skipped the freshness check | final review | ADM-09 H2 (omitted/empty/forged/stale player/stale team; legacy form) | installed |
+| H3 | Authority/record state not re-checked after the lock | final review | ADM-09 H3 (trashed, status and capability changed while waiting) | installed |
+| H4 | Portal captain review outside the request lock | final review | ADM-09 H4; POR-04 (stateless, stale, staff-first, locked re-read); HTTP-06 (rendered token, removed token, stale page) | installed |
+| H5 | Mapping not serialized; term/insert errors ignored; incomplete partial result | final review | ADM-11 H5, ADM-12 H5 (conflicting previews, held/NULL lock, injected term and insert failures, early stop) | installed |
+| T-01 | Free-form sport entry (tag boxes, Quick Edit, block-editor panel, generic term screen); no safe team/event sport control | final UI batch | ADM-15 (selector, preselect, disabled/invented/blank refused, read-only, legacy multi/disabled/sportless kept, publish held as draft, nonce/capability, show_ui/Quick Edit/editor panel); mutations U-M2/M3/M4/M9/M10; fixture-browser (1440/390/320, publish blocked without sport, event sidebar) | root live (team 1440/320: read-only sport, no tag boxes) |
+| T-02 | Default sport silently first enabled sport / Soccer | final UI batch | ADM-15 (player without context, disabled context); mutation U-M1 | installed |
+| T-03 | Settings checkboxes without id/label_for; three toggles said only "Enabled" | final UI batch | ADM-15 (all five checkboxes); mutation U-M6 | live LA08, LA09; root live |
+| T-04 | Team Roster read-only dead end | final UI batch | ADM-15 (manage/add/list links, region, preselect only if editable, no write); mutations U-M7/U-M8 | root live (roster Manage/Add links) |
+| T-05 | Team sidebar competition/season help inaccurate | final UI batch (text) | ADM-15 render; review | installed |
+| T-06 | Sport terms editable by anyone with manage_categories / created by edit_posts tag box | final UI batch | ADM-15 (Editor vs Administrator caps); mutation U-M5 | installed |
+| U-06b | Quick Edit and Calendar Event block-editor League Levels duplicated the details box | final UI batch | ADM-15 (Quick Edit filter, editor script per type); fixture-browser event sidebar | installed |
+| L-01 | Match Sport help promised a first-enabled fallback; unscoped match showed "Soccer" | polish | ADM-16; fixture-browser (new match, 6 widths) | not installed |
+| L-02 | Settings draw input lower than its neighbours when the label wraps | polish (CSS) | fixture-browser: equal input tops at 1440/1280/1024/900 (old: 16 px lower at 1280/1024/900); ADM-16 row class | not installed |
+| L-03 | Phone filter labels sat beside the previous select | polish | ADM-16 (DOM grouping on 5 filter bars); fixture-browser (label beside or above its own control, 6 widths) | not installed |
+| L-04 | Venues & availability had duplicate `input#submit` | polish | ADM-16 (no `id="submit"`, three own ids, names kept, all ids unique); fixture-browser | not installed |
+| L-05 | Venue availability list widened the page to 459 px on phones when rules exist | polish | ADM-16 (labelled scroll region); fixture-browser 390/320 | not installed |
+| L-06 | Match Competitions/Seasons tag boxes can create a term with no sport | not changed (documented limit) | — | installed as before |
 
 Earlier usability IDs from the first admin audit map onto these rows: U-04
 (Matches density) → U-06/batch 2 columns; U-07 (menu sprawl) → B-01/C-05;
@@ -527,7 +583,8 @@ list filters and the previewed single-use mapping, ADM-12 fixture generation
 batch link, scheduling prerequisite), ADM-13 scoring overrides and per-level
 standings, ADM-14 scheduling scope, knockout targets and the team-member
 lookup, ADM-15 Team/Event sport controls, sport term authority, Settings
-labels and Team Roster links. `tests/wordpress-portal.php` POR-04 also checks portal review history
+labels and Team Roster links, ADM-16 final polish (match Sport row, Venues
+button ids and table region, filter label grouping). `tests/wordpress-portal.php` POR-04 also checks portal review history
 and that an authorized portal roster add closes the matching request once.
 
 The final-review cases inject faults without touching core: a `query` filter
@@ -550,5 +607,68 @@ lookup); the suite failed on every one.
   successful demo-seeding case inside a rolled-back transaction. Never run it on
   the Intramurals database.
 - Phone layout was measured on the disposable site with local headless Chromium
-  (fixture evidence). Live acceptance on the Intramurals copy happens after the
-  reviewed update is installed.
+  (fixture evidence). Live acceptance on the installed Intramurals copy is
+  recorded below and is separate evidence.
+
+## Installed-site acceptance (2026-10-15, `ce16748`)
+
+Runtime: LeagueFlow 1.0.3 built from `ce16748`, installed by WordPress Manager
+job `4bede15b` (digest `9e8483e5…41fa3`, rollback retained). Root's read-only
+snapshots before and after install matched for content/statuses, 6,620 LF
+business meta rows, terms/relationships, settings, roles/permissions and 12
+anonymous standings scopes.
+
+Browser: native Zoer Playwright Chromium, compact, logged in as administrator
+through a one-time admin handoff (not recorded). Diagnostics were started on a
+blank tab before navigation. Two short sessions were used; the first was
+released early by mistake and one replacement was prepared. Both were released
+and the saved Clearcote profile was not touched. These are viewport checks,
+not physical devices, WebKit or stock Firefox.
+
+| Case | Screen | Width | Result |
+|---|---|---|---|
+| LA01 | Overview: one menu (17 links), sport switcher, Needs attention, per-sport counts | 1440 | pass |
+| LA02 | Requests: tabs, Pending/Approved/Declined/Dismissed/All, Sport/Level/search/attention filters, problem flags | 1440 | pass |
+| LA03 | Request #1800 detail: missing player, only Dismiss (reason required), focus moved to panel | 320 | pass, not submitted |
+| LA04 | Generate fixtures (Volleyball): level groups, duplicates counted, scope required, no generate button until scoped | 320 | pass, nothing generated |
+| LA05 | Standings (Volleyball): one table per level, no D column, set labels | 390 | pass |
+| LA06 | Public /standings/ (viewed while logged in) | 390 | pass |
+| LA07 | Venues & availability: prerequisite notice, auto-schedule off, labelled form | 390 | pass, nothing added |
+| LA08 | Settings: 3-column grid, all labels and checkbox purposes, scoring by sport/competition | 1440 | pass, nothing saved |
+| LA09 | Settings | 390 | pass |
+| LA10 | Setup check (all sports) | 390 | pass |
+| LA11 | Setup check (Volleyball): 12 checks, mapping form | 390 | pass, no preview/apply |
+| LA12 | Existing player edit: context, back link, details first, labelled membership card, filter boxes | 390 | pass, not saved |
+| LA13 | Existing match edit: date/time, venue, scores, status, result type, sport read-only, knockout targets | 320 | pass, not saved |
+| LA14 | Seasons: Sport and Current columns, required sport, per-sport current | 1440 | pass, nothing added |
+| LA15 | Knockout Brackets (Volleyball): explicit All/Current season, empty state | 390 | pass |
+
+No page overflowed horizontally (document width ≤ viewport). Console: only
+jQuery Migrate logs and one core 403 from the logout confirmation page; no page
+errors or failed requests.
+
+Root's own live checks (separate evidence): Settings at 1440/390/320, Utilities
+at 320, an existing Team at 1440/320, and the 17-link menu.
+
+Observations, not regressions (the first, third and fourth are fixed in
+source by the polish batch above; that source is not installed yet):
+
+- Match edit Sport help still said "…or the first enabled sport"; the screen
+  itself uses only the record's or the opened sport (`get_context_sport_slug`).
+  With no sport at all it also printed "Soccer" (the definition fallback).
+- Matches keep classic Competitions/Seasons tag boxes, so typing a new name
+  there creates a term with no sport (documented limit, unchanged).
+- Settings: the "Points for a draw (tie)" label wraps, so its input sat lower
+  than its neighbours. Venues & availability rendered two `input#submit`
+  (duplicate id, pre-existing).
+- On phones, Brackets/Standings/Generate filter labels sat beside the previous
+  select.
+
+Not covered live: any write (approve, decline, assign, dismiss, mapping
+preview/apply, fixture generation, scheduling, saves, scoring overrides),
+Add forms (`post-new.php` would create auto-drafts), Calendar Event editor,
+Teams/Players/Matches list views and legacy alias redirects, keyboard Tab
+order beyond focus moving to the request panel, other sports' screens, and
+anonymous or participant roles. No fixtures, accounts or records were created,
+so nothing needed cleanup; opening the two edit screens set WordPress's normal
+edit lock only.

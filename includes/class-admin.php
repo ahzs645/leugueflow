@@ -1233,7 +1233,7 @@ class Admin {
 				</tr>
 			</table>
 
-			<?php submit_button( $availability['id'] ? __( 'Update Availability', 'leagueflow' ) : __( 'Add Availability', 'leagueflow' ), 'primary', 'submit', false ); ?>
+			<?php submit_button( $availability['id'] ? __( 'Update Availability', 'leagueflow' ) : __( 'Add Availability', 'leagueflow' ), 'primary', 'submit', false, array( 'id' => 'leagueflow-availability-submit' ) ); ?>
 			<?php if ( $availability['id'] ) : ?>
 				<a class="button" href="<?php echo esc_url( $this->get_field_page_url( $page, $sport_slug ) ); ?>"><?php esc_html_e( 'Cancel Edit', 'leagueflow' ); ?></a>
 			<?php endif; ?>
@@ -1257,6 +1257,7 @@ class Admin {
 
 		$weekday_options = $this->field_availability_manager->get_weekday_options();
 		?>
+		<div class="leagueflow-table-scroll" role="region" tabindex="0" aria-label="<?php esc_attr_e( 'Venue availability', 'leagueflow' ); ?>">
 		<table class="widefat striped leagueflow-availability-table">
 			<thead>
 				<tr>
@@ -1315,6 +1316,7 @@ class Admin {
 				<?php endforeach; ?>
 			</tbody>
 		</table>
+		</div>
 		<?php
 	}
 
@@ -1406,7 +1408,7 @@ class Admin {
 				</tr>
 			</table>
 
-			<?php submit_button( __( 'Auto Schedule Matches', 'leagueflow' ), 'primary', 'submit', false ); ?>
+			<?php submit_button( __( 'Auto Schedule Matches', 'leagueflow' ), 'primary', 'submit', false, array( 'id' => 'leagueflow-schedule-submit' ) ); ?>
 		</form>
 		<?php
 	}
@@ -1436,24 +1438,30 @@ class Admin {
 			<?php if ( $is_sport_locked ) : ?>
 				<input type="hidden" name="sport" value="<?php echo esc_attr( $sport_slug ); ?>" />
 			<?php else : ?>
-				<label for="leagueflow-preview-sport"><?php esc_html_e( 'Sport', 'leagueflow' ); ?></label>
-				<select id="leagueflow-preview-sport" name="sport">
-					<option value=""><?php esc_html_e( 'All sports', 'leagueflow' ); ?></option>
-					<?php foreach ( $this->sports_manager->get_enabled_sports() as $sport ) : ?>
-						<option value="<?php echo esc_attr( $sport['slug'] ); ?>" <?php selected( $sport_slug, $sport['slug'] ); ?>><?php echo esc_html( $sport['label'] ); ?></option>
+				<span class="leagueflow-filter-field">
+					<label for="leagueflow-preview-sport"><?php esc_html_e( 'Sport', 'leagueflow' ); ?></label>
+					<select id="leagueflow-preview-sport" name="sport">
+						<option value=""><?php esc_html_e( 'All sports', 'leagueflow' ); ?></option>
+						<?php foreach ( $this->sports_manager->get_enabled_sports() as $sport ) : ?>
+							<option value="<?php echo esc_attr( $sport['slug'] ); ?>" <?php selected( $sport_slug, $sport['slug'] ); ?>><?php echo esc_html( $sport['label'] ); ?></option>
+						<?php endforeach; ?>
+					</select>
+				</span>
+			<?php endif; ?>
+			<span class="leagueflow-filter-field">
+				<label for="leagueflow-preview-date"><?php esc_html_e( 'Date', 'leagueflow' ); ?></label>
+				<input type="date" id="leagueflow-preview-date" name="preview_date" value="<?php echo esc_attr( $preview_date ); ?>" />
+			</span>
+			<span class="leagueflow-filter-field">
+				<label for="leagueflow-preview-availability"><?php esc_html_e( 'Availability', 'leagueflow' ); ?></label>
+				<select id="leagueflow-preview-availability" name="preview_availability">
+					<option value=""><?php esc_html_e( 'Any matching availability', 'leagueflow' ); ?></option>
+					<?php foreach ( $this->field_availability_manager->get_availability_options( $sport_slug ) as $value => $label ) : ?>
+						<option value="<?php echo esc_attr( $value ); ?>" <?php selected( $availability_id, $value ); ?>><?php echo esc_html( $label ); ?></option>
 					<?php endforeach; ?>
 				</select>
-			<?php endif; ?>
-			<label for="leagueflow-preview-date"><?php esc_html_e( 'Date', 'leagueflow' ); ?></label>
-			<input type="date" id="leagueflow-preview-date" name="preview_date" value="<?php echo esc_attr( $preview_date ); ?>" />
-			<label for="leagueflow-preview-availability"><?php esc_html_e( 'Availability', 'leagueflow' ); ?></label>
-			<select id="leagueflow-preview-availability" name="preview_availability">
-				<option value=""><?php esc_html_e( 'Any matching availability', 'leagueflow' ); ?></option>
-				<?php foreach ( $this->field_availability_manager->get_availability_options( $sport_slug ) as $value => $label ) : ?>
-					<option value="<?php echo esc_attr( $value ); ?>" <?php selected( $availability_id, $value ); ?>><?php echo esc_html( $label ); ?></option>
-				<?php endforeach; ?>
-			</select>
-			<?php submit_button( __( 'Preview Slots', 'leagueflow' ), 'secondary', 'submit', false ); ?>
+			</span>
+			<?php submit_button( __( 'Preview Slots', 'leagueflow' ), 'secondary', 'submit', false, array( 'id' => 'leagueflow-preview-slots-submit' ) ); ?>
 		</form>
 
 		<?php if ( empty( $slots ) ) : ?>
@@ -2775,8 +2783,12 @@ class Admin {
 			<tr>
 				<th scope="row"><?php esc_html_e( 'Sport', 'leagueflow' ); ?></th>
 				<td>
-					<strong><?php echo esc_html( $this->sports_manager->get_definition( $sport_slug )['label'] ); ?></strong>
-					<p class="description"><?php esc_html_e( 'Matches inherit their sport from the selected teams. When no teams are selected yet, LeagueFlow uses the sport you opened this screen from, or the first enabled sport.', 'leagueflow' ); ?></p>
+					<?php if ( $sport_slug ) : ?>
+						<strong><?php echo esc_html( $this->sports_manager->get_definition( $sport_slug )['label'] ); ?></strong>
+					<?php else : ?>
+						<strong><?php esc_html_e( 'Not set yet', 'leagueflow' ); ?></strong>
+					<?php endif; ?>
+					<p class="description"><?php esc_html_e( 'A match takes its sport from the selected teams. Until teams are chosen, it uses the sport you opened this screen from; when you opened it from All sports, no sport is set until you choose the teams.', 'leagueflow' ); ?></p>
 				</td>
 			</tr>
 			<tr>
@@ -6199,36 +6211,42 @@ class Admin {
 		<form method="get" class="leagueflow-filter-bar">
 			<input type="hidden" name="page" value="<?php echo esc_attr( $page ); ?>" />
 			<input type="hidden" name="lf_sport" value="<?php echo esc_attr( $sport_slug ); ?>" />
-			<label for="leagueflow-level-filter"><?php esc_html_e( 'Level', 'leagueflow' ); ?></label>
-			<select id="leagueflow-level-filter" name="league_level">
-				<option value=""><?php esc_html_e( 'All levels', 'leagueflow' ); ?></option>
-				<?php foreach ( $this->get_league_level_terms() as $term ) : ?>
-					<option value="<?php echo esc_attr( (string) $term->term_id ); ?>" <?php selected( $league_level_id, (int) $term->term_id ); ?>><?php echo esc_html( $term->name ); ?></option>
-				<?php endforeach; ?>
-			</select>
+			<span class="leagueflow-filter-field">
+				<label for="leagueflow-level-filter"><?php esc_html_e( 'Level', 'leagueflow' ); ?></label>
+				<select id="leagueflow-level-filter" name="league_level">
+					<option value=""><?php esc_html_e( 'All levels', 'leagueflow' ); ?></option>
+					<?php foreach ( $this->get_league_level_terms() as $term ) : ?>
+						<option value="<?php echo esc_attr( (string) $term->term_id ); ?>" <?php selected( $league_level_id, (int) $term->term_id ); ?>><?php echo esc_html( $term->name ); ?></option>
+					<?php endforeach; ?>
+				</select>
+			</span>
 
-			<label for="leagueflow-competition-filter"><?php esc_html_e( 'Competition', 'leagueflow' ); ?></label>
-			<select id="leagueflow-competition-filter" name="competition">
-				<option value=""><?php esc_html_e( 'All competitions', 'leagueflow' ); ?></option>
-				<?php foreach ( $competitions as $id => $name ) : ?>
-					<option value="<?php echo esc_attr( (string) $id ); ?>" <?php selected( $competition_id, $id ); ?>><?php echo esc_html( $name ); ?></option>
-				<?php endforeach; ?>
-			</select>
+			<span class="leagueflow-filter-field">
+				<label for="leagueflow-competition-filter"><?php esc_html_e( 'Competition', 'leagueflow' ); ?></label>
+				<select id="leagueflow-competition-filter" name="competition">
+					<option value=""><?php esc_html_e( 'All competitions', 'leagueflow' ); ?></option>
+					<?php foreach ( $competitions as $id => $name ) : ?>
+						<option value="<?php echo esc_attr( (string) $id ); ?>" <?php selected( $competition_id, $id ); ?>><?php echo esc_html( $name ); ?></option>
+					<?php endforeach; ?>
+				</select>
+			</span>
 
-			<label for="leagueflow-season-filter"><?php esc_html_e( 'Season', 'leagueflow' ); ?></label>
-			<select id="leagueflow-season-filter" name="season">
-				<option value=""><?php esc_html_e( 'All seasons', 'leagueflow' ); ?></option>
-				<?php if ( $sport_slug ) : ?>
-					<?php if ( $current_term instanceof \WP_Term ) : ?>
-						<option value="current" <?php selected( 'current', $season_mode ); ?>><?php echo esc_html( sprintf( /* translators: %s: season name */ __( 'Current season (%s)', 'leagueflow' ), $current_term->name ) ); ?></option>
-					<?php else : ?>
-						<option value="current" disabled><?php esc_html_e( 'Current season (not set for this sport)', 'leagueflow' ); ?></option>
+			<span class="leagueflow-filter-field">
+				<label for="leagueflow-season-filter"><?php esc_html_e( 'Season', 'leagueflow' ); ?></label>
+				<select id="leagueflow-season-filter" name="season">
+					<option value=""><?php esc_html_e( 'All seasons', 'leagueflow' ); ?></option>
+					<?php if ( $sport_slug ) : ?>
+						<?php if ( $current_term instanceof \WP_Term ) : ?>
+							<option value="current" <?php selected( 'current', $season_mode ); ?>><?php echo esc_html( sprintf( /* translators: %s: season name */ __( 'Current season (%s)', 'leagueflow' ), $current_term->name ) ); ?></option>
+						<?php else : ?>
+							<option value="current" disabled><?php esc_html_e( 'Current season (not set for this sport)', 'leagueflow' ); ?></option>
+						<?php endif; ?>
 					<?php endif; ?>
-				<?php endif; ?>
-				<?php foreach ( $seasons as $id => $name ) : ?>
-					<option value="<?php echo esc_attr( (string) $id ); ?>" <?php selected( 'selected' === $season_mode || '' === $season_mode ? $season_id : -1, $id ); ?>><?php echo esc_html( $name ); ?></option>
-				<?php endforeach; ?>
-			</select>
+					<?php foreach ( $seasons as $id => $name ) : ?>
+						<option value="<?php echo esc_attr( (string) $id ); ?>" <?php selected( 'selected' === $season_mode || '' === $season_mode ? $season_id : -1, $id ); ?>><?php echo esc_html( $name ); ?></option>
+					<?php endforeach; ?>
+				</select>
+			</span>
 
 			<?php submit_button( __( 'Filter', 'leagueflow' ), 'secondary', '', false ); ?>
 		</form>

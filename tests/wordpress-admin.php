@@ -1605,6 +1605,83 @@ foreach ( $t13_terms as $t13_term ) {
 }
 
 
+// ---------------------------------------------------------------------------
+// ADM-16 · Final UI polish: honest match Sport help, unique Venues submit IDs,
+// filter labels grouped with their own control (layout is checked in a browser).
+// ---------------------------------------------------------------------------
+$lfa_dom = static function ( $html ) {
+	$dom = new DOMDocument();
+	libxml_use_internal_errors( true );
+	$dom->loadHTML( '<?xml encoding="utf-8"?><div>' . $html . '</div>' );
+	libxml_clear_errors();
+	return new DOMXPath( $dom );
+};
+$lfa_filter_groups_ok = static function ( $html ) use ( $lfa_dom ) {
+	$xpath  = $lfa_dom( $html );
+	$labels = $xpath->query( '//form[contains(concat(" ", normalize-space(@class), " "), " leagueflow-filter-bar ")]//label[@for]' );
+	if ( 0 === $labels->length ) {
+		return false;
+	}
+	foreach ( $labels as $label ) {
+		$parent = $label->parentNode;
+		$for    = $label->getAttribute( 'for' );
+		if ( ! $parent instanceof DOMElement || false === strpos( ' ' . $parent->getAttribute( 'class' ) . ' ', ' leagueflow-filter-field ' ) ) {
+			return false;
+		}
+		if ( 1 !== $xpath->query( './/*[@id="' . $for . '"]', $parent )->length ) {
+			return false;
+		}
+	}
+	return true;
+};
+$lfa_ids_unique = static function ( $html ) use ( $lfa_dom ) {
+	$ids = array();
+	foreach ( $lfa_dom( $html )->query( '//*[@id]' ) as $node ) {
+		$ids[] = $node->getAttribute( 'id' );
+	}
+	return count( $ids ) === count( array_unique( $ids ) );
+};
+
+$adm16_blank = lfa_post( 'lf_match', 'lfa adm16 no sport', 'draft' );
+wp_set_object_terms( $adm16_blank, array(), 'lf_sport', false );
+$_GET = array();
+$html = lfa_render( static function () use ( $admin, $adm16_blank ) { $admin->render_match_metabox( get_post( $adm16_blank ) ); } );
+lfa_check( false === strpos( $html, 'first enabled sport' ), 'ADM-16 match Sport help no longer promises a first-enabled-sport fallback' );
+lfa_check( (bool) preg_match( '/<th scope="row">Sport<\/th>\s*<td>\s*<strong>Not set yet<\/strong>/', $html ), 'ADM-16 a match with no sport and no context shows "Not set yet", not Soccer' );
+$_GET = array( 'post_type' => 'lf_match', 'lf_sport' => 'cricket' );
+$html = lfa_render( static function () use ( $admin, $adm16_blank ) { $admin->render_match_metabox( get_post( $adm16_blank ) ); } );
+$_GET = array();
+lfa_check( (bool) preg_match( '/<th scope="row">Sport<\/th>\s*<td>\s*<strong>Cricket<\/strong>/', $html ), 'ADM-16 opened from a sport, the match shows that sport' );
+$html = lfa_render( static function () use ( $admin, $score_match ) { $admin->render_match_metabox( get_post( $score_match ) ); } );
+lfa_check( (bool) preg_match( '/<th scope="row">Sport<\/th>\s*<td>\s*<strong>Cricket<\/strong>/', $html ), 'ADM-16 an existing match keeps showing its own sport' );
+clean_object_term_cache( $adm16_blank, 'lf_match' );
+lfa_check( array() === wp_get_object_terms( $adm16_blank, 'lf_sport', array( 'fields' => 'ids' ) ), 'ADM-16 rendering assigns no sport' );
+
+$adm16_fields = get_option( \LeagueFlow\Field_Availability_Manager::OPTION, null );
+update_option( \LeagueFlow\Field_Availability_Manager::OPTION, array( array( 'id' => 'lfa-adm16', 'name' => 'lfa adm16 rule', 'venue' => 'lfa venue', 'sport_slug' => 'cricket', 'date' => '', 'weekday' => 1, 'start_time' => '18:00', 'end_time' => '20:00', 'slot_minutes' => 60, 'buffer_minutes' => 0, 'active' => true, 'notes' => '' ) ), false );
+$html = lfa_render( static function () use ( $admin ) { $_GET = array( 'page' => 'leagueflow-fields', 'lf_sport' => 'cricket' ); $admin->render_field_availability_page(); $_GET = array(); } );
+null === $adm16_fields ? delete_option( \LeagueFlow\Field_Availability_Manager::OPTION ) : update_option( \LeagueFlow\Field_Availability_Manager::OPTION, $adm16_fields, false );
+lfa_check( 0 === substr_count( $html, 'id="submit"' ), 'ADM-16 Venues & availability has no generic id="submit" button' );
+lfa_check( 1 === substr_count( $html, 'id="leagueflow-availability-submit"' ) && 1 === substr_count( $html, 'id="leagueflow-schedule-submit"' ) && 1 === substr_count( $html, 'id="leagueflow-preview-slots-submit"' ), 'ADM-16 the three Venues buttons have their own IDs' );
+lfa_check( 3 === substr_count( $html, 'name="submit"' ), 'ADM-16 Venues buttons keep their submitted name' );
+lfa_check( $lfa_ids_unique( $html ), 'ADM-16 every id on Venues & availability is unique' );
+lfa_check( $lfa_filter_groups_ok( $html ), 'ADM-16 slot-preview filter labels are grouped with their own control' );
+lfa_check( (bool) preg_match( '/<div class="leagueflow-table-scroll" role="region" tabindex="0" aria-label="Venue availability">\s*<table class="widefat striped leagueflow-availability-table">/', $html ), 'ADM-16 the availability list scrolls inside its own labelled region on phones' );
+
+$html = lfa_render( static function () use ( $admin ) { $_GET = array( 'page' => 'leagueflow-brackets', 'lf_sport' => 'cricket' ); $admin->render_brackets_page(); $_GET = array(); } );
+lfa_check( false !== strpos( $html, 'id="leagueflow-season-filter"' ) && $lfa_filter_groups_ok( $html ), 'ADM-16 Brackets Level/Competition/Season labels are grouped with their own select' );
+$html = lfa_render( static function () use ( $admin ) { $_GET = array( 'page' => 'leagueflow-standings', 'lf_sport' => 'cricket' ); $admin->render_standings_page(); $_GET = array(); } );
+lfa_check( false !== strpos( $html, 'id="leagueflow-level-filter"' ) && $lfa_filter_groups_ok( $html ), 'ADM-16 Standings filter labels are grouped with their own select' );
+$html = lfa_render( static function () use ( $admin ) { $_GET = array( 'page' => 'leagueflow-requests' ); $admin->requests_page(); $_GET = array(); } );
+lfa_check( false !== strpos( $html, 'id="leagueflow-request-search"' ) && $lfa_filter_groups_ok( $html ), 'ADM-16 Requests filter labels are grouped with their own control' );
+$_GET = array( 'page' => 'leagueflow-setup', 'lf_sport' => 'cricket' );
+$html = lfa_render( static function () use ( $setup ) { $setup->render_page( 'cricket' ); } );
+$_GET = array();
+lfa_check( false !== strpos( $html, 'id="leagueflow-map-type"' ) && $lfa_filter_groups_ok( $html ), 'ADM-16 Setup mapping filter labels are grouped with their own select' );
+$html = lfa_render( static function () use ( $admin ) { $admin->render_settings_page(); } );
+lfa_check( 3 === preg_match_all( '/<tr class="leagueflow-setting-row--points"><th scope="row"><label for="leagueflow_setting_points_(win|draw|loss)"/', $html ), 'ADM-16 the three points rows keep the row class used for bottom alignment' );
+wp_delete_post( $adm16_blank, true );
+
 // Cleanup of this suite's own fixtures.
 foreach ( array_merge( $teams, array( $hockey_team, $cricket_trash_team, $dated_new, $dated_old, $blank_date, $trashed, $event_dated, $event_undated, $score_match, $forfeit, $player, $request, $league_page, $own_private, $hockey_member, $team_comp, $team_trash, $team_draft, $team_priv ), $drafts, $private_players, $players, $request_ids ) as $id ) {
 	wp_delete_post( $id, true );

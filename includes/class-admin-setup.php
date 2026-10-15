@@ -696,17 +696,21 @@ class Admin_Setup {
 			<form method="get" class="leagueflow-filter-bar" action="<?php echo esc_url( admin_url( 'admin.php' ) ); ?>">
 				<input type="hidden" name="page" value="<?php echo esc_attr( self::PAGE ); ?>" />
 				<input type="hidden" name="lf_sport" value="<?php echo esc_attr( $sport_slug ); ?>" />
-				<label for="leagueflow-map-type"><?php esc_html_e( 'Records', 'leagueflow' ); ?></label>
-				<select id="leagueflow-map-type" name="map_type">
-					<?php foreach ( self::record_types() as $value => $label ) : ?>
-						<option value="<?php echo esc_attr( $value ); ?>" <?php selected( $type, $value ); ?>><?php echo esc_html( $label ); ?></option>
-					<?php endforeach; ?>
-				</select>
-				<label for="leagueflow-map-taxonomy"><?php esc_html_e( 'Missing', 'leagueflow' ); ?></label>
-				<select id="leagueflow-map-taxonomy" name="map_taxonomy">
-					<option value="lf_competition" <?php selected( $taxonomy, 'lf_competition' ); ?>><?php esc_html_e( 'Competition', 'leagueflow' ); ?></option>
-					<option value="lf_season" <?php selected( $taxonomy, 'lf_season' ); ?>><?php esc_html_e( 'Season', 'leagueflow' ); ?></option>
-				</select>
+				<span class="leagueflow-filter-field">
+					<label for="leagueflow-map-type"><?php esc_html_e( 'Records', 'leagueflow' ); ?></label>
+					<select id="leagueflow-map-type" name="map_type">
+						<?php foreach ( self::record_types() as $value => $label ) : ?>
+							<option value="<?php echo esc_attr( $value ); ?>" <?php selected( $type, $value ); ?>><?php echo esc_html( $label ); ?></option>
+						<?php endforeach; ?>
+					</select>
+				</span>
+				<span class="leagueflow-filter-field">
+					<label for="leagueflow-map-taxonomy"><?php esc_html_e( 'Missing', 'leagueflow' ); ?></label>
+					<select id="leagueflow-map-taxonomy" name="map_taxonomy">
+						<option value="lf_competition" <?php selected( $taxonomy, 'lf_competition' ); ?>><?php esc_html_e( 'Competition', 'leagueflow' ); ?></option>
+						<option value="lf_season" <?php selected( $taxonomy, 'lf_season' ); ?>><?php esc_html_e( 'Season', 'leagueflow' ); ?></option>
+					</select>
+				</span>
 				<?php submit_button( __( 'Show records', 'leagueflow' ), 'secondary', '', false ); ?>
 			</form>
 

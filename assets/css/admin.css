@@ -881,3 +881,45 @@
 	margin: 4px 8px 4px 0;
 	white-space: normal;
 }
+
+/*
+ * Filter bars: each label travels with its own control. Without a wrapper the
+ * label and select were separate flex items, so on phones a label could wrap
+ * onto the line of the previous select.
+ */
+.leagueflow-filter-field {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	max-width: 100%;
+	min-width: 0;
+}
+
+.leagueflow-filter-field select,
+.leagueflow-filter-field input {
+	min-width: 0;
+	max-width: 100%;
+}
+
+@media (max-width: 782px) {
+	.leagueflow-filter-field {
+		flex-direction: column;
+		align-items: stretch;
+		gap: 2px;
+		flex: 1 1 100%;
+	}
+}
+
+/*
+ * Settings scoring row: a label that wraps to two lines ("Points for a draw
+ * (tie)") must not push its input below the neighbouring inputs. The label
+ * takes the spare height and the input sits on the shared bottom line.
+ */
+.leagueflow-settings-panel .form-table tr.leagueflow-setting-row--points {
+	display: flex;
+	flex-direction: column;
+}
+
+.leagueflow-settings-panel .form-table tr.leagueflow-setting-row--points > th {
+	flex: 1 1 auto;
+}

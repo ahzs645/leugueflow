@@ -274,24 +274,30 @@ class Admin_Requests {
 				<input type="hidden" name="page" value="<?php echo esc_attr( self::PAGE ); ?>" />
 				<input type="hidden" name="type" value="<?php echo esc_attr( $filters['type'] ); ?>" />
 				<input type="hidden" name="status" value="<?php echo esc_attr( $filters['status'] ); ?>" />
-				<label for="leagueflow-request-sport"><?php esc_html_e( 'Sport', 'leagueflow' ); ?></label>
-				<select id="leagueflow-request-sport" name="lf_sport">
-					<option value=""><?php esc_html_e( 'All sports', 'leagueflow' ); ?></option>
-					<?php foreach ( $this->sports_manager->get_enabled_sports() as $sport ) : ?>
-						<option value="<?php echo esc_attr( $sport['slug'] ); ?>" <?php selected( $filters['lf_sport'], $sport['slug'] ); ?>><?php echo esc_html( $sport['label'] ); ?></option>
-					<?php endforeach; ?>
-				</select>
-				<label for="leagueflow-request-level"><?php esc_html_e( 'Level', 'leagueflow' ); ?></label>
-				<select id="leagueflow-request-level" name="lf_league_level">
-					<option value=""><?php esc_html_e( 'All levels', 'leagueflow' ); ?></option>
-					<?php foreach ( get_terms( array( 'taxonomy' => 'lf_league_level', 'hide_empty' => false ) ) as $level_term ) : ?>
-						<?php if ( $level_term instanceof \WP_Term ) : ?>
-							<option value="<?php echo esc_attr( $level_term->slug ); ?>" <?php selected( $filters['lf_league_level'], $level_term->slug ); ?>><?php echo esc_html( $level_term->name ); ?></option>
-						<?php endif; ?>
-					<?php endforeach; ?>
-				</select>
-				<label for="leagueflow-request-search"><?php esc_html_e( 'Search player', 'leagueflow' ); ?></label>
-				<input type="search" id="leagueflow-request-search" name="s" value="<?php echo esc_attr( $filters['s'] ); ?>" />
+				<span class="leagueflow-filter-field">
+					<label for="leagueflow-request-sport"><?php esc_html_e( 'Sport', 'leagueflow' ); ?></label>
+					<select id="leagueflow-request-sport" name="lf_sport">
+						<option value=""><?php esc_html_e( 'All sports', 'leagueflow' ); ?></option>
+						<?php foreach ( $this->sports_manager->get_enabled_sports() as $sport ) : ?>
+							<option value="<?php echo esc_attr( $sport['slug'] ); ?>" <?php selected( $filters['lf_sport'], $sport['slug'] ); ?>><?php echo esc_html( $sport['label'] ); ?></option>
+						<?php endforeach; ?>
+					</select>
+				</span>
+				<span class="leagueflow-filter-field">
+					<label for="leagueflow-request-level"><?php esc_html_e( 'Level', 'leagueflow' ); ?></label>
+					<select id="leagueflow-request-level" name="lf_league_level">
+						<option value=""><?php esc_html_e( 'All levels', 'leagueflow' ); ?></option>
+						<?php foreach ( get_terms( array( 'taxonomy' => 'lf_league_level', 'hide_empty' => false ) ) as $level_term ) : ?>
+							<?php if ( $level_term instanceof \WP_Term ) : ?>
+								<option value="<?php echo esc_attr( $level_term->slug ); ?>" <?php selected( $filters['lf_league_level'], $level_term->slug ); ?>><?php echo esc_html( $level_term->name ); ?></option>
+							<?php endif; ?>
+						<?php endforeach; ?>
+					</select>
+				</span>
+				<span class="leagueflow-filter-field">
+					<label for="leagueflow-request-search"><?php esc_html_e( 'Search player', 'leagueflow' ); ?></label>
+					<input type="search" id="leagueflow-request-search" name="s" value="<?php echo esc_attr( $filters['s'] ); ?>" />
+				</span>
 				<label class="leagueflow-inline-check"><input type="checkbox" name="issues" value="1" <?php checked( $filters['issues'], 1 ); ?> /> <?php esc_html_e( 'Only requests that need attention', 'leagueflow' ); ?></label>
 				<?php submit_button( __( 'Filter', 'leagueflow' ), 'secondary', '', false ); ?>
 			</form>
