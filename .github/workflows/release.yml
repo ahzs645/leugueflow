@@ -121,6 +121,7 @@ jobs:
           wp eval-file "$GITHUB_WORKSPACE/tests/wordpress-portal.php" --path="$wp_root"
           wp eval-file "$GITHUB_WORKSPACE/tests/wordpress-portal-http.php" --path="$wp_root"
           wp eval-file "$GITHUB_WORKSPACE/tests/wordpress-admin.php" --path="$wp_root"
+          wp eval-file "$GITHUB_WORKSPACE/tests/wordpress-public-api.php" --path="$wp_root"
           wp eval-file "$GITHUB_WORKSPACE/tests/wordpress-update.php" --path="$wp_root"
 
   publish:

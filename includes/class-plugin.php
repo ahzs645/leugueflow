@@ -73,6 +73,7 @@ class Plugin {
 		$admin     = new Admin( $standings, $knockout, $this->renderer, $seeder, $sports, $exporter, $fields, $fixtures, $requests );
 		$portal    = new Portal( $this->renderer );
 		$rest      = new Rest_Controller( $standings, $knockout, $this->renderer );
+		$public_matches = new Public_Matches_API();
 		$shortcode = new Shortcodes( $this->renderer );
 		$blocks    = new Blocks( $this->renderer );
 		$templates = new Template_Loader( $this->renderer );
@@ -92,6 +93,7 @@ class Plugin {
 			$admin,
 			$portal,
 			$rest,
+			$public_matches,
 			$shortcode,
 			$blocks,
 			$templates,
