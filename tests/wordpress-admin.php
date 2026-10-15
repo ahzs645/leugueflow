@@ -531,8 +531,13 @@ lfa_check( 1 + count( $sports->get_enabled_sport_slugs() ) === count( array_filt
 foreach ( $sports->get_enabled_sport_slugs() as $sport_slug ) {
 	$sport_links = wp_list_pluck( $submenu[ 'leagueflow-sport-' . $sport_slug ] ?? array(), 2 );
 	lfa_check( in_array( 'edit.php?post_type=lf_match&lf_sport=' . $sport_slug, $sport_links, true ), 'ADM-08 sport menu opens its filtered Matches list' );
+	lfa_check( false === strpos( implode( '', wp_list_pluck( $submenu[ 'leagueflow-sport-' . $sport_slug ], 0 ) ), 'awaiting-mod' ), 'ADM-08 sport menus do not repeat the global pending badge' );
 }
 lfa_check( ! in_array( 'leagueflow-sport-rugby', wp_list_pluck( $menu, 2 ), true ), 'ADM-08 a disabled sport has no sidebar entry' );
+$_GET = array( 'page' => 'leagueflow-sport-cricket' );
+$overview_bar = lfa_render( array( $admin, 'render_context_bar' ) );
+lfa_check( false !== strpos( $overview_bar, 'aria-current="page">Overview' ) && false !== strpos( $overview_bar, 'leagueflow-sport-switch' ), 'ADM-08 sport overview has its breadcrumb label and switcher' );
+$_GET = array();
 lfa_check( ! preg_grep( '/^leagueflow-sport-|^post-new\.php|^leagueflow-placements$/', $slugs ), 'ADM-08 no per-sport, Add or Placements clutter in the sidebar' );
 lfa_check( false !== strpos( implode( '', wp_list_pluck( $submenu['leagueflow'], 0 ) ), 'League Levels (all sports)' ), 'ADM-08 shared League Levels are labelled global' );
 $legacy_hook = get_plugin_page_hookname( 'leagueflow-sport-cricket-fixtures', '' );

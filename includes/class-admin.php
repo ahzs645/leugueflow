@@ -329,7 +329,8 @@ class Admin {
 			foreach ( array_slice( $items, 1, 12 ) as $item ) {
 				$url = false !== strpos( $item[3], '.php?' ) ? $item[3] : 'admin.php?page=' . $item[3];
 				$url = add_query_arg( 'lf_sport', $sport_slug, $url );
-				add_submenu_page( $parent, $item[0], $item[1], $item[2], $url );
+				// The shared inbox owns the global pending badge; sport links must not repeat it.
+				add_submenu_page( $parent, $item[0], $item[0], $item[2], $url );
 			}
 		}
 
@@ -418,6 +419,9 @@ class Admin {
 	 */
 	protected function get_context_screen_label() {
 		$page   = $this->get_current_admin_plugin_page_slug();
+		if ( 0 === strpos( $page, 'leagueflow-sport-' ) && 'leagueflow-sport-' . $this->get_context_sport_slug() === $page ) {
+			$page = 'leagueflow';
+		}
 		$titles = array(
 			'leagueflow'           => __( 'Overview', 'leagueflow' ),
 			'leagueflow-setup'     => __( 'Setup check', 'leagueflow' ),
