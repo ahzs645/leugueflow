@@ -488,10 +488,10 @@ says "Soccer"). PHP lint (51 files), asset-version, admin-asset, admin-filter
 and Python packaging tests pass. JS is unchanged, so calendar tests were not
 rerun; security/portal suites were not rerun (no change to those paths).
 
-## Request detail display (L-07, source only, 2026-10-15)
+## Request detail display (L-07, installed, 2026-10-15)
 
-Implemented and tested on disposable sites; **not installed** until root
-imports, builds and updates it. Admin display only: no change to
+Installed from `6debab8` by normal WordPress Manager update `44d379cf`,
+with exact full-package read-back and rollback retained. Admin display only: no change to
 `Join_Request_Service`, review actions, conflict rules, stored meta, history,
 capabilities, options, version or updater origin.
 
@@ -586,7 +586,7 @@ decision, generation, mapping or save was submitted on the real site.
 | L-04 | Venues & availability had duplicate `input#submit` | polish | ADM-16 (no `id="submit"`, three own ids, names kept, all ids unique); fixture-browser | installed; not retested live |
 | L-05 | Venue availability list widened the page to 459 px on phones when rules exist | polish | ADM-16 (labelled scroll region); fixture-browser 390/320 | installed; not observable live (the copy has no availability rules; none were added) |
 | L-06 | Match Competitions/Seasons tag boxes can create a term with no sport | not changed (documented limit) | — | installed as before |
-| L-07 | Request detail said "Current team in this sport: None" for a player already on the requested team, and an assigned placement read as "Join a team" | request-detail display (admin only; service unchanged) | ADM-17 (18 checks incl. 4 fixture checks; `5235d8bf` fails 7) | not installed (live repro F02 on owned request 2495) |
+| L-07 | Request detail said "Current team in this sport: None" for a player already on the requested team, and an assigned placement read as "Join a team" | request-detail display (admin only; service unchanged) | ADM-17 (18 checks incl. 4 fixture checks; `5235d8bf` fails 7) | installed; final operator browser read-back passed for owned 2494/2495 |
 
 Earlier usability IDs from the first admin audit map onto these rows: U-04
 (Matches density) → U-06/batch 2 columns; U-07 (menu sprawl) → B-01/C-05;
@@ -776,3 +776,50 @@ Soccer/Basketball edit screens, participant roles, physical devices. Cleanup of
 the owned fixtures and drafts 2496–2500 is root's step; this document does not
 claim it.
 
+
+## Final operator verification and cleanup (2026-10-15 UTC)
+
+The final runtime code is commit `6debab816491898f10496a81c189827fd4e29c6f`,
+installed by normal WordPress Manager job
+`44d379cf-b2e7-461d-8027-d79d2a4d4c61`. Its full 63-file read-back digest is
+`b4423aa057b5afbb548b6cae083922bbd3bd9cb120c071ad76075155a8304394`;
+rollback is retained. LeagueFlow remains active at 1.0.3 with its updater origin
+unchanged. This follow-up documentation is excluded from the runtime package.
+
+Root independently verified in the actual local-site browser:
+
+- All 17 visible LeagueFlow menu destinations at 390 x 844 and 1440 x 900:
+  each loaded its expected screen, with no critical error and no horizontal
+  document overflow (34 read-only page checks). Navigation was allowed to finish
+  at DOMContentLoaded; an initial empty-document observation was excluded.
+- Installed request 2494 showed Join a team, requested Team B and current Team B.
+  Installed request 2495 showed Placement request, assigned Team A and current
+  Team A. No decision was submitted during this read-back.
+- F33 is now resolved: in the WordPress block editor, click Meta Boxes, then
+  press Arrow Up on its focused Drag to resize separator. The Calendar Event
+  Details pane opens. Owned event 2500 had Volleyball selected, with no duplicate
+  Sports/Levels tag boxes; no field was changed or saved.
+
+Cleanup completed through the rehearsed ownership manifest, never broad deletion:
+11 marked owned posts/drafts (2490–2500) and three marked terms (19–21) were
+removed, including the five exact browser-created drafts adopted earlier.
+Foreign-reference checks passed; no extra marked or unadopted LeagueFlow posts
+remained. All 12 protected snapshot sections exactly matched the pre-fixture
+baseline afterward: original posts/dates, 6,620 LeagueFlow business-meta rows,
+protected history metadata, terms and memberships, settings/options, role and
+user-permission hashes, and all 12 anonymous standings scopes. This is not a
+claim that WordPress edit locks or session/transient rows are byte-identical.
+
+The dedicated development computer was restored after its temporary memory
+pause: PHP 8.3.32, Composer 2.10.3, setup ready, build-on-save enabled and its
+worker alive with a successful build of current source. No production site,
+real league record, account, role definition, current-season selection or old
+trashed match was changed. No public release or remote push was performed.
+
+Remaining acceptance limits: no physical device, WebKit or stock Firefox; no
+actual populated availability table because this local copy has no rules; no
+full keyboard traversal of every field or participant-account browser audit.
+The populated-table responsive matrix and role/security suites are disposable-site
+coverage, explicitly separate from these actual admin/browser checks. Admin-only
+draft preview rows, empty shared-level groups, notification defaults and generic
+competition/season tag creation remain the documented observations above.
