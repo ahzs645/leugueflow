@@ -189,7 +189,7 @@ views), sport-scoped status counts, match score validation, competition/season
 sport rules, accessible names and select options in rendered metaboxes, the
 guarded create-only demo data (edits to earlier demo objects survive a rerun; a
 record appearing after the preview stops the run), list counts that match what an
-Author can see, the single LeagueFlow menu with sport context and legacy page
+Author can see, the shared LeagueFlow screens, enabled sport menus, sport context and legacy page
 aliases, and the Requests inbox (nonce/role/ID guards, flags, reviewed actions,
 history, unknown legacy statuses, per-request locking checked with a second
 database connection, stale forms, and reconciliation only from explicit roster
