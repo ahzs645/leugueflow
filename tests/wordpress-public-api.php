@@ -128,7 +128,8 @@ try {
 	lfapi_check( $away === $r->get_data()['results'][1]['result']['winnerOverride'], 'Explicit winner override preserved.' );
 	update_post_meta( $c, 'lf_outcome', 'double_forfeit' );
 	lfapi_check( null === lfapi_request( 'match-results', $scope )->get_data()['results'][0]['result']['winnerTeamId'], 'Double forfeit has no winner.' );
-	lfapi_check( 0 === count( lfapi_request( 'match-events', $scope + array( 'page' => 99 ) )->get_data()['events'] ), 'Out-of-range pages are empty without changing totals.' );
+	$r = lfapi_request( 'match-events', $scope + array( 'page' => 99 ) );
+	lfapi_check( array() === $r->get_data()['events'] && 6 === $r->get_data()['total'] && 1 === $r->get_data()['pages'] && 1 === $r->get_data()['pagination']['previousPage'], 'Out-of-range pages are empty without losing the real total or previous link.' );
 	lfapi_check( lfapi_request( 'match-events', array(), 'POST' )->get_status() >= 400 && lfapi_request( 'match-results', array(), 'DELETE' )->get_status() >= 400, 'Public feeds offer no mutation route.' );
 	lfapi_check( is_array( lfapi_request( 'matches', array( 'competition' => $ctx['lf_competition'], 'limit' => 1 ) )->get_data() ), 'Legacy matches response remains available.' );
 	$routes = rest_get_server()->get_routes();

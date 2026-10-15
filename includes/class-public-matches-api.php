@@ -146,6 +146,12 @@ class Public_Matches_API {
 		$filters = $this->filters( $request, $results );
 		if ( is_wp_error( $filters ) ) { return $filters; }
 		$query = $this->query( $filters );
+		// Core WP_Query skips FOUND_ROWS when an offset page is empty. Recover the
+		// real filtered total with a one-row query, without loading an entire feed.
+		if ( ! $wpdb->last_error && ! $query->posts && $filters['page'] > 1 ) {
+			$count = $this->query( array_merge( $filters, array( 'page' => 1, 'per_page' => 1 ) ) );
+			$query->found_posts = $count->found_posts;
+		}
 		if ( $wpdb->last_error ) { return new \WP_Error( 'leagueflow_feed_unavailable', 'The match feed could not be loaded.', array( 'status' => 500 ) ); }
 		$match_ids = wp_list_pluck( $query->posts, 'ID' );
 		if ( $match_ids ) {
