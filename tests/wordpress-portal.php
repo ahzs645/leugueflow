@@ -212,7 +212,17 @@ $tests['POR-04 join request, approval and rejection'] = static function() use ( 
 	foreach ( array( 0, 999999, $page, $p_p ) as $bad ) { lfp_expect( 'invalid-request', lfp_submit( $u['captain_a'], 'review_join_request', array( 'lf_join_request_id' => $bad, 'lf_join_decision' => 'approve' ) ), "Review invalid id $bad" ); }
 	lfp_expect( 'invalid-request', lfp_submit( $u['captain_a'], 'review_join_request', array( 'lf_join_request_id' => $request, 'lf_join_decision' => 'maybe' ) ), 'Unknown decision' );
 	lfp_assert( 'pending' === get_post_meta( $request, 'lf_request_status', true ) && ! \LeagueFlow\player_has_team( $p_j, $team_a ) && ! \LeagueFlow\player_has_team( $p_j, $team_b ), 'Denied review changed request or roster.' );
-	lfp_expect( 'join-request-approved', lfp_submit( $u['captain_a'], 'review_join_request', array( 'lf_join_request_id' => $request, 'lf_join_decision' => 'approve' ) ), 'Owner approval' );
+	// The portal form carries the request state (same token the rendered form holds).
+	$state = static function( $id ) { clean_post_cache( $id ); $s = \LeagueFlow\Join_Request_Service::shared(); return $s->state_token( $s->inspect( $id ) ); };
+	$mail  = count( $GLOBALS['lfp_mail'] );
+	lfp_expect( 'join-request-changed', lfp_submit( $u['captain_a'], 'review_join_request', array( 'lf_join_request_id' => $request, 'lf_join_decision' => 'approve' ) ), 'Owner approval from a form without the request state' );
+	$view = $state( $request );
+	update_post_meta( $request, 'lf_player_id', $p_j2 );
+	lfp_expect( 'join-request-changed', lfp_submit( $u['captain_a'], 'review_join_request', array( 'lf_join_request_id' => $request, 'lf_join_decision' => 'approve', 'lf_request_state' => $view ) ), 'Owner approval from a form loaded before the request changed' );
+	update_post_meta( $request, 'lf_player_id', $p_j );
+	clean_post_cache( $request );
+	lfp_assert( 'pending' === get_post_meta( $request, 'lf_request_status', true ) && ! \LeagueFlow\player_has_team( $p_j, $team_a ) && ! \LeagueFlow\player_has_team( $p_j2, $team_a ) && $mail === count( $GLOBALS['lfp_mail'] ) && array() === \LeagueFlow\Join_Request_Service::shared()->get_history( $request ), 'A stale or stateless portal review changed the request, roster, history or mail.' );
+	lfp_expect( 'join-request-approved', lfp_submit( $u['captain_a'], 'review_join_request', array( 'lf_join_request_id' => $request, 'lf_join_decision' => 'approve', 'lf_request_state' => $state( $request ) ) ), 'Owner approval' );
 	lfp_assert( 'approved' === get_post_meta( $request, 'lf_request_status', true ) && \LeagueFlow\player_has_team( $p_j, $team_a ), 'Approval did not add the player.' );
 	$mail = count( $GLOBALS['lfp_mail'] );
 	lfp_expect( 'team-denied', lfp_submit( $u['captain_a'], 'review_join_request', array( 'lf_join_request_id' => $request, 'lf_join_decision' => 'decline' ) ), 'Duplicate review after approval' );
@@ -220,7 +230,7 @@ $tests['POR-04 join request, approval and rejection'] = static function() use ( 
 
 	lfp_expect( 'join-request-sent', lfp_submit( $u['joiner2'], 'request_join_team', $req( $team_a ) ), 'Second joiner request' );
 	$request2 = (int) lfp_requests( $p_j2 )[0];
-	lfp_expect( 'join-request-declined', lfp_submit( $u['captain_a'], 'review_join_request', array( 'lf_join_request_id' => $request2, 'lf_join_decision' => 'decline' ) ), 'Owner rejection' );
+	lfp_expect( 'join-request-declined', lfp_submit( $u['captain_a'], 'review_join_request', array( 'lf_join_request_id' => $request2, 'lf_join_decision' => 'decline', 'lf_request_state' => $state( $request2 ) ) ), 'Owner rejection' );
 	lfp_expect( 'team-denied', lfp_submit( $u['captain_a'], 'review_join_request', array( 'lf_join_request_id' => $request2, 'lf_join_decision' => 'approve' ) ), 'Approval after rejection' );
 	lfp_assert( 'declined' === get_post_meta( $request2, 'lf_request_status', true ) && ! \LeagueFlow\player_has_team( $p_j2, $team_a ), 'Rejected request joined the team.' );
 
@@ -228,6 +238,45 @@ $tests['POR-04 join request, approval and rejection'] = static function() use ( 
 	$placement = (int) array_values( array_diff( lfp_requests( $p_j2 ), array( $request2 ) ) )[0];
 	lfp_expect( 'team-denied', lfp_submit( $u['captain_a'], 'review_join_request', array( 'lf_join_request_id' => $placement, 'lf_join_decision' => 'approve', 'lf_team_id' => $team_a ) ), 'Captain approving a placement request' );
 	lfp_assert( 'pending' === get_post_meta( $placement, 'lf_request_status', true ) && ! \LeagueFlow\player_has_team( $p_j2, $team_a ), 'Captain placed a player through a placement request.' );
+
+	// Request history and reconciliation from an explicit, authorized portal roster entry point.
+	$service = \LeagueFlow\Join_Request_Service::shared();
+	lfp_assert( 1 === count( $service->get_history( $request ) ) && 'approved' === $service->get_history( $request )[0]['event'] && 'declined' === $service->get_history( $request2 )[0]['event'], 'Portal review decisions were not recorded once in the request history.' );
+	$staff_add = array( 'lf_team_id' => $team_a, 'lf_email' => 'portal_joiner2@example.test', 'lf_player_name' => 'Portal Joiner Two' );
+	lfp_expect( 'player-added', lfp_submit( $GLOBALS['lfp_admin'], 'add_player', $staff_add ), 'Staff roster add of a player with a pending placement request' );
+	clean_post_cache( $placement );
+	lfp_assert( \LeagueFlow\player_has_team( $p_j2, $team_a ) && 'approved' === get_post_meta( $placement, 'lf_request_status', true ) && 1 === count( $service->get_history( $placement ) ) && 'reconciled' === $service->get_history( $placement )[0]['event'], 'Authorized portal roster add did not close the matching pending request exactly once.' );
+	lfp_assert( 'declined' === get_post_meta( $request2, 'lf_request_status', true ) && 1 === count( $service->get_history( $request2 ) ), 'Roster add changed an already declined request.' );
+	lfp_expect( 'player-added', lfp_submit( $GLOBALS['lfp_admin'], 'add_player', $staff_add ), 'Repeated staff roster add' );
+	lfp_assert( 1 === count( $service->get_history( $placement ) ), 'Repeated roster add recorded the reconciliation twice.' );
+	\LeagueFlow\remove_player_team_id( $p_j2, $team_a );
+
+	// Staff and the captain race: staff decide between the captain's page load and submit.
+	lfp_expect( 'join-request-sent', lfp_submit( $u['joiner2'], 'request_join_team', $req( $team_a ) ), 'Joiner two asks again' );
+	$request3 = (int) array_values( array_diff( lfp_requests( $p_j2 ), array( $request2, $placement ) ) )[0];
+	$captain_view = $state( $request3 );
+	wp_set_current_user( $GLOBALS['lfp_admin'] );
+	lfp_assert( true === $service->apply_action( $request3, 'decline', array( 'note' => 'Staff decided first', 'state' => $state( $request3 ) ) ), 'Staff decline failed.' );
+	$mail = count( $GLOBALS['lfp_mail'] );
+	lfp_expect( 'team-denied', lfp_submit( $u['captain_a'], 'review_join_request', array( 'lf_join_request_id' => $request3, 'lf_join_decision' => 'approve', 'lf_request_state' => $captain_view ) ), 'Captain approval after a staff decision' );
+	clean_post_cache( $request3 );
+	lfp_assert( 'declined' === get_post_meta( $request3, 'lf_request_status', true ) && ! \LeagueFlow\player_has_team( $p_j2, $team_a ) && 1 === count( $service->get_history( $request3 ) ) && $mail === count( $GLOBALS['lfp_mail'] ), 'A captain approval overwrote a staff decision, or recorded/mailed twice.' );
+	// The decision changed between the handler's first read and the lock: the locked re-read wins.
+	lfp_expect( 'join-request-sent', lfp_submit( $u['joiner2'], 'request_join_team', $req( $team_a ) ), 'Joiner two asks a third time' );
+	$request4 = (int) array_values( array_diff( lfp_requests( $p_j2 ), array( $request2, $placement, $request3 ) ) )[0];
+	$view4    = $state( $request4 );
+	$fired    = false;
+	$race     = static function ( $query ) use ( &$fired, $request4 ) {
+		global $wpdb;
+		if ( ! $fired && 0 === stripos( ltrim( $query ), 'SELECT GET_LOCK(' ) ) { $fired = true; $wpdb->update( $wpdb->postmeta, array( 'meta_value' => 'declined' ), array( 'post_id' => $request4, 'meta_key' => 'lf_request_status' ) ); }
+		return $query;
+	};
+	add_filter( 'query', $race );
+	$mail = count( $GLOBALS['lfp_mail'] );
+	try { lfp_expect( 'join-request-changed', lfp_submit( $u['captain_a'], 'review_join_request', array( 'lf_join_request_id' => $request4, 'lf_join_decision' => 'approve', 'lf_request_state' => $view4 ) ), 'Captain approval racing a decision stored while it waited for the lock' ); }
+	finally { remove_filter( 'query', $race ); }
+	clean_post_cache( $request4 );
+	lfp_assert( $fired && 'declined' === get_post_meta( $request4, 'lf_request_status', true ) && ! \LeagueFlow\player_has_team( $p_j2, $team_a ) && array() === $service->get_history( $request4 ) && $mail === count( $GLOBALS['lfp_mail'] ), 'The locked re-read did not protect the stored decision.' );
 
 	$settings = get_option( 'leagueflow_settings' ); update_option( 'leagueflow_settings', array_merge( $settings, array( 'player_registration_open' => 0 ) ) );
 	try { lfp_expect( 'registration-closed', lfp_submit( $u['player_p'], 'request_join_team', $req( $team_b ) ), 'Request while registration closed' ); }

@@ -62,6 +62,8 @@ class Sports_Manager {
 			add_filter( 'manage_edit-' . $taxonomy . '_columns', array( $this, 'add_term_sport_column' ) );
 			add_filter( 'manage_' . $taxonomy . '_custom_column', array( $this, 'render_term_sport_column' ), 10, 3 );
 		}
+
+		add_filter( 'pre_insert_term', array( $this, 'require_term_sport_on_add' ), 10, 3 );
 	}
 
 	/**
@@ -422,7 +424,36 @@ class Sports_Manager {
 	}
 
 	/**
-	 * Ensure enabled sport terms exist.
+	 * Create enabled sport terms that do not exist yet. Existing terms (and any
+	 * name or description an editor gave them) are left exactly as they are.
+	 *
+	 * @return void
+	 */
+	public function ensure_missing_enabled_terms() {
+		if ( ! taxonomy_exists( 'lf_sport' ) ) {
+			return;
+		}
+
+		foreach ( $this->get_enabled_sports() as $slug => $sport ) {
+			$term = get_term_by( 'slug', $slug, 'lf_sport' );
+
+			if ( $term instanceof \WP_Term ) {
+				continue;
+			}
+
+			wp_insert_term(
+				$sport['label'],
+				'lf_sport',
+				array(
+					'slug'        => $slug,
+					'description' => $sport['description'],
+				)
+			);
+		}
+	}
+
+	/**
+	 * Create or synchronize enabled sport terms (name and description).
 	 *
 	 * @return void
 	 */
@@ -547,16 +578,21 @@ class Sports_Manager {
 	 */
 	public function render_term_sport_field() {
 		$current = sanitize_key( (string) wp_unslash( $_GET['lf_sport'] ?? $_GET['sport'] ?? '' ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$enabled = $this->get_enabled_sport_slugs();
+
+		if ( ! $current && 1 === count( $enabled ) ) {
+			$current = $enabled[0];
+		}
 		?>
-		<div class="form-field term-group">
+		<div class="form-field term-group form-required">
 			<label for="lf_sport_slug"><?php esc_html_e( 'Sport', 'leagueflow' ); ?></label>
-			<select name="lf_sport_slug" id="lf_sport_slug">
+			<select name="lf_sport_slug" id="lf_sport_slug" required aria-required="true">
 				<option value=""><?php esc_html_e( 'Select a sport', 'leagueflow' ); ?></option>
 				<?php foreach ( $this->get_enabled_sports() as $sport ) : ?>
 					<option value="<?php echo esc_attr( $sport['slug'] ); ?>" <?php selected( $current, $sport['slug'] ); ?>><?php echo esc_html( $sport['label'] ); ?></option>
 				<?php endforeach; ?>
 			</select>
-			<p><?php esc_html_e( 'Assign this competition or season to a sport so sport-specific pages and filters stay consistent.', 'leagueflow' ); ?></p>
+			<p><?php esc_html_e( 'Required. Competitions and seasons belong to one sport, so sport pages and filters stay consistent.', 'leagueflow' ); ?></p>
 		</div>
 		<?php
 	}
@@ -573,11 +609,14 @@ class Sports_Manager {
 		<tr class="form-field term-group-wrap">
 			<th scope="row"><label for="lf_sport_slug"><?php esc_html_e( 'Sport', 'leagueflow' ); ?></label></th>
 			<td>
-				<select name="lf_sport_slug" id="lf_sport_slug">
+				<select name="lf_sport_slug" id="lf_sport_slug" required aria-required="true">
 					<option value=""><?php esc_html_e( 'Select a sport', 'leagueflow' ); ?></option>
 					<?php foreach ( $this->get_enabled_sports() as $sport ) : ?>
 						<option value="<?php echo esc_attr( $sport['slug'] ); ?>" <?php selected( $current, $sport['slug'] ); ?>><?php echo esc_html( $sport['label'] ); ?></option>
 					<?php endforeach; ?>
+					<?php if ( $current && ! in_array( $current, $this->get_enabled_sport_slugs(), true ) && isset( static::get_definitions()[ $current ] ) ) : ?>
+						<option value="<?php echo esc_attr( $current ); ?>" selected><?php echo esc_html( sprintf( /* translators: %s: sport */ __( '%s (disabled)', 'leagueflow' ), static::get_definitions()[ $current ]['label'] ) ); ?></option>
+					<?php endif; ?>
 				</select>
 				<p class="description"><?php esc_html_e( 'Use the same sport across competitions, teams, and matches for consistent filtering.', 'leagueflow' ); ?></p>
 			</td>
@@ -592,23 +631,49 @@ class Sports_Manager {
 	 * @return void
 	 */
 	public function save_term_sport_field( $term_id ) {
-		if ( ! current_user_can( 'manage_categories' ) ) {
+		// Only the add/edit term forms carry the field. Quick Edit and programmatic
+		// updates must leave the stored sport alone (they used to reset it).
+		if ( ! current_user_can( 'manage_categories' ) || ! isset( $_POST['lf_sport_slug'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing
 			return;
 		}
 
-		$slug = sanitize_key( wp_unslash( $_POST['lf_sport_slug'] ?? '' ) );
+		$slug = sanitize_key( wp_unslash( $_POST['lf_sport_slug'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing
 
-		if ( ! $slug ) {
-			$enabled = $this->get_enabled_sport_slugs();
-			$slug    = ! empty( $enabled ) ? $enabled[0] : 'soccer';
-		}
-
-		if ( isset( static::get_definitions()[ $slug ] ) ) {
-			update_term_meta( $term_id, 'lf_sport_slug', $slug );
+		// A blank choice never falls back to the first enabled sport.
+		if ( '' === $slug || ! isset( static::get_definitions()[ $slug ] ) ) {
 			return;
 		}
 
-		delete_term_meta( $term_id, 'lf_sport_slug' );
+		update_term_meta( $term_id, 'lf_sport_slug', $slug );
+	}
+
+	/**
+	 * Refuse to create a competition or season from the admin form without a sport.
+	 *
+	 * @param string|\WP_Error $term Term name or error.
+	 * @param string           $taxonomy Taxonomy.
+	 * @param array<mixed>     $args Insert args.
+	 * @return string|\WP_Error
+	 */
+	public function require_term_sport_on_add( $term, $taxonomy, $args = array() ) {
+		unset( $args );
+
+		if ( is_wp_error( $term ) || ! in_array( $taxonomy, array( 'lf_competition', 'lf_season' ), true ) ) {
+			return $term;
+		}
+
+		// Only the add-term form; programmatic inserts keep their own contract.
+		if ( 'add-tag' !== sanitize_key( wp_unslash( $_POST['action'] ?? '' ) ) || ! isset( $_POST['lf_sport_slug'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing
+			return $term;
+		}
+
+		$slug = sanitize_key( wp_unslash( $_POST['lf_sport_slug'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing
+
+		if ( '' === $slug || ! isset( static::get_definitions()[ $slug ] ) ) {
+			return new \WP_Error( 'leagueflow_sport_required', __( 'Choose the sport this competition or season belongs to.', 'leagueflow' ) );
+		}
+
+		return $term;
 	}
 
 	/**

@@ -69,7 +69,8 @@ class Plugin {
 		$this->renderer = new Renderer( $standings, $knockout, $sports );
 
 		$seeder    = new Seeder();
-		$admin     = new Admin( $standings, $knockout, $this->renderer, $seeder, $sports, $exporter, $fields, $fixtures );
+		$requests  = new Join_Request_Service();
+		$admin     = new Admin( $standings, $knockout, $this->renderer, $seeder, $sports, $exporter, $fields, $fixtures, $requests );
 		$portal    = new Portal( $this->renderer );
 		$rest      = new Rest_Controller( $standings, $knockout, $this->renderer );
 		$shortcode = new Shortcodes( $this->renderer );
@@ -87,6 +88,7 @@ class Plugin {
 			$fields,
 			$match_status,
 			$availability,
+			$requests,
 			$admin,
 			$portal,
 			$rest,

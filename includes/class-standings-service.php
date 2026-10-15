@@ -15,6 +15,13 @@ defined( 'ABSPATH' ) || exit;
 class Standings_Service {
 
 	/**
+	 * Rules used by the calculation in progress (sort callback reads them).
+	 *
+	 * @var array<string, mixed>
+	 */
+	protected $rules = array();
+
+	/**
 	 * Register hooks.
 	 *
 	 * @return void
@@ -33,7 +40,9 @@ class Standings_Service {
 	 * @return array<int, array<string, mixed>>
 	 */
 	public function get_rows( $competition_id = 0, $season_id = 0, $sport_id = 0, $league_level_id = 0 ) {
-		$matches  = $this->get_finished_matches( $competition_id, $season_id, $sport_id, $league_level_id );
+		$sport_term  = $sport_id ? get_term( $sport_id, 'lf_sport' ) : null;
+		$this->rules = get_effective_rules( $sport_term instanceof \WP_Term ? $sport_term->slug : '', $competition_id )['values'];
+		$matches     = $this->get_finished_matches( $competition_id, $season_id, $sport_id, $league_level_id );
 		$team_ids = $this->get_context_team_ids( $competition_id, $season_id, $sport_id, $league_level_id );
 
 		foreach ( $matches as $match ) {
@@ -105,18 +114,18 @@ class Standings_Service {
 			if ( $home_score > $away_score ) {
 				$rows[ $home_id ]['wins']++;
 				$rows[ $away_id ]['losses']++;
-				$rows[ $home_id ]['points'] += (int) get_setting( 'points_win', 3 );
-				$rows[ $away_id ]['points'] += (int) get_setting( 'points_loss', 0 );
+				$rows[ $home_id ]['points'] += (int) $this->rules['points_win'];
+				$rows[ $away_id ]['points'] += (int) $this->rules['points_loss'];
 			} elseif ( $away_score > $home_score ) {
 				$rows[ $away_id ]['wins']++;
 				$rows[ $home_id ]['losses']++;
-				$rows[ $away_id ]['points'] += (int) get_setting( 'points_win', 3 );
-				$rows[ $home_id ]['points'] += (int) get_setting( 'points_loss', 0 );
+				$rows[ $away_id ]['points'] += (int) $this->rules['points_win'];
+				$rows[ $home_id ]['points'] += (int) $this->rules['points_loss'];
 			} else {
 				$rows[ $home_id ]['draws']++;
 				$rows[ $away_id ]['draws']++;
-				$rows[ $home_id ]['points'] += (int) get_setting( 'points_draw', 1 );
-				$rows[ $away_id ]['points'] += (int) get_setting( 'points_draw', 1 );
+				$rows[ $home_id ]['points'] += (int) $this->rules['points_draw'];
+				$rows[ $away_id ]['points'] += (int) $this->rules['points_draw'];
 			}
 		}
 
@@ -165,8 +174,8 @@ class Standings_Service {
 		if ( 'double_forfeit' === $outcome ) {
 			$rows[ $home_id ]['losses']++;
 			$rows[ $away_id ]['losses']++;
-			$rows[ $home_id ]['points'] += (int) get_setting( 'points_loss', 0 );
-			$rows[ $away_id ]['points'] += (int) get_setting( 'points_loss', 0 );
+			$rows[ $home_id ]['points'] += (int) $this->rules['points_loss'];
+			$rows[ $away_id ]['points'] += (int) $this->rules['points_loss'];
 			return;
 		}
 
@@ -182,8 +191,8 @@ class Standings_Service {
 		$rows[ $loser_id ]['losses']++;
 		$rows[ $winner_id ]['goals_for']     += $walkover;
 		$rows[ $loser_id ]['goals_against']  += $walkover;
-		$rows[ $winner_id ]['points']        += (int) get_setting( 'points_win', 3 );
-		$rows[ $loser_id ]['points']         += (int) get_setting( 'points_loss', 0 );
+		$rows[ $winner_id ]['points']        += (int) $this->rules['points_win'];
+		$rows[ $loser_id ]['points']         += (int) $this->rules['points_loss'];
 	}
 
 	/**
@@ -324,7 +333,7 @@ class Standings_Service {
 			return $right['points'] <=> $left['points'];
 		}
 
-		$rules = get_setting( 'tie_breakers', defaults()['tie_breakers'] );
+		$rules = ! empty( $this->rules['tie_breakers'] ) ? (array) $this->rules['tie_breakers'] : get_setting( 'tie_breakers', defaults()['tie_breakers'] );
 
 		foreach ( $rules as $rule ) {
 			switch ( $rule ) {
