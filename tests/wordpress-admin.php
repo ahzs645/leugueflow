@@ -1682,6 +1682,63 @@ $html = lfa_render( static function () use ( $admin ) { $admin->render_settings_
 lfa_check( 3 === preg_match_all( '/<tr class="leagueflow-setting-row--points"><th scope="row"><label for="leagueflow_setting_points_(win|draw|loss)"/', $html ), 'ADM-16 the three points rows keep the row class used for bottom alignment' );
 wp_delete_post( $adm16_blank, true );
 
+// ---------------------------------------------------------------------------
+// ADM-17 · Request detail: current team and resolved-placement origin (live L04).
+// Display only; inspect() keeps excluding the requested team for conflict checks.
+// ---------------------------------------------------------------------------
+$adm17_detail = static function ( $request_id ) use ( $admin ) {
+	clean_post_cache( $request_id );
+	$html = lfa_render( static function () use ( $admin, $request_id ) { $admin->requests()->render_detail( $request_id ); } );
+	return trim( preg_replace( '/\s+/', ' ', wp_strip_all_tags( $html ) ) );
+};
+$adm17_p = array();
+foreach ( range( 1, 5 ) as $n ) {
+	$adm17_p[ $n ] = lfa_post( 'lf_player', 'lfa adm17 player ' . $n, 'publish', array( 'lf_email' => "lfa-adm17-$n@example.test" ), $ctx );
+}
+$a17_named = $req( $adm17_p[1], $teams[1] );
+lfa_check( true === $service->apply_action( $a17_named, 'approve' ), 'ADM-17 fixture: named request approved' );
+$text = $adm17_detail( $a17_named );
+lfa_check( false !== strpos( $text, 'Request Join a team' ) && false !== strpos( $text, 'Requested team lfa Cricket B' ), 'ADM-17 approved named request still reads as Join a team with its requested team' );
+lfa_check( false !== strpos( $text, 'Current team in this sport lfa Cricket B' ) && false === strpos( $text, 'Current team in this sport None' ), 'ADM-17 approved named request lists the requested team as the current team (not None)' );
+lfa_check( array() === $service->inspect( $a17_named )['sport_team_ids'], 'ADM-17 service conflict list still excludes the requested team' );
+
+\LeagueFlow\assign_player_to_team( $adm17_p[2], $teams[2] );
+$a17_member = $req( $adm17_p[2], $teams[2] );
+lfa_check( true === $service->apply_action( $a17_member, 'resolve_member' ), 'ADM-17 fixture: already-member request resolved' );
+$text = $adm17_detail( $a17_member );
+lfa_check( false !== strpos( $text, 'Current team in this sport lfa Cricket C' ) && false !== strpos( $text, 'Requested team lfa Cricket C' ), 'ADM-17 resolved already-member request shows that team as current' );
+
+$a17_place = $req( $adm17_p[3], 0 );
+$text = $adm17_detail( $a17_place );
+lfa_check( false !== strpos( $text, 'Request Needs placement' ) && false !== strpos( $text, 'Current team in this sport None' ) && false === strpos( $text, 'Assigned team' ), 'ADM-17 pending placement reads Needs placement with no current team' );
+lfa_check( true === $service->apply_action( $a17_place, 'assign', array( 'team_id' => $teams[3] ) ), 'ADM-17 fixture: placement assigned' );
+$history_before = count( $service->get_history( $a17_place ) );
+$text = $adm17_detail( $a17_place );
+lfa_check( false !== strpos( $text, 'Request Placement request' ) && false === strpos( $text, 'Request Join a team' ), 'ADM-17 assigned placement keeps reading as a placement request' );
+lfa_check( false !== strpos( $text, 'Assigned team lfa Cricket D' ) && false === strpos( $text, 'Requested team' ), 'ADM-17 assigned placement labels the team as Assigned team' );
+lfa_check( false !== strpos( $text, 'Current team in this sport lfa Cricket D' ), 'ADM-17 assigned placement lists the assigned team as current' );
+lfa_check( 'team' === $service->inspect( $a17_place )['type'] && '1' === (string) get_post_meta( $a17_place, 'lf_placed_from_queue', true ) && $history_before === count( $service->get_history( $a17_place ) ), 'ADM-17 stored request data and history are unchanged by the display' );
+$html = lfa_render( static function () use ( $admin ) { $_GET = array( 'page' => 'leagueflow-requests', 'status' => 'approved', 's' => 'lfa adm17 player 3' ); $admin->requests_page(); $_GET = array(); } );
+lfa_check( false !== strpos( wp_strip_all_tags( $html ), 'Placement request: placed on lfa Cricket D' ), 'ADM-17 the request list summary shows the placement origin' );
+
+\LeagueFlow\assign_player_to_team( $adm17_p[4], $teams[0] );
+$a17_other = $req( $adm17_p[4], $teams[2] );
+$text = $adm17_detail( $a17_other );
+lfa_check( false !== strpos( $text, 'Current team in this sport lfa Cricket A' ) && false === strpos( $text, 'Current team in this sport lfa Cricket C' ) && false === strpos( $text, 'lfa Cricket A, lfa Cricket C' ), 'ADM-17 a pending request to another team lists only the player\'s actual team' );
+
+$a17_private = $req( $adm17_p[5], 0 );
+lfa_check( true === $service->apply_action( $a17_private, 'assign', array( 'team_id' => $team_priv ) ), 'ADM-17 fixture: placement on a private team' );
+wp_set_current_user( 0 );
+$anon = $adm17_detail( $a17_private );
+lfa_check( false !== strpos( $anon, 'That request could not be found.' ) && false === strpos( $anon, 'lfa Cricket Private Team' ) && false === strpos( $anon, 'lfa-adm17-5@example.test' ) && false === strpos( $anon, 'Assigned team' ), 'ADM-17 anonymous output is unchanged: no detail, team or e-mail' );
+wp_set_current_user( $author_id );
+$author_view = $adm17_detail( $a17_private );
+lfa_check( false !== strpos( $author_view, 'That request could not be found.' ) && false === strpos( $author_view, 'lfa Cricket Private Team' ), 'ADM-17 a role that cannot read the request sees no detail' );
+wp_set_current_user( $admin_id );
+lfa_check( false !== strpos( $adm17_detail( $a17_private ), 'Assigned team lfa Cricket Private Team' ), 'ADM-17 a reviewer who can read the private team sees it' );
+$request_ids = array_merge( $request_ids, array( $a17_named, $a17_member, $a17_place, $a17_other, $a17_private ) );
+$players     = array_merge( $players, array_values( $adm17_p ) );
+
 // Cleanup of this suite's own fixtures.
 foreach ( array_merge( $teams, array( $hockey_team, $cricket_trash_team, $dated_new, $dated_old, $blank_date, $trashed, $event_dated, $event_undated, $score_match, $forfeit, $player, $request, $league_page, $own_private, $hockey_member, $team_comp, $team_trash, $team_draft, $team_priv ), $drafts, $private_players, $players, $request_ids ) as $id ) {
 	wp_delete_post( $id, true );

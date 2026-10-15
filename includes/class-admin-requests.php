@@ -373,17 +373,56 @@ class Admin_Requests {
 	public function summary( $info ) {
 		$sport = $this->sports_manager->get_definition( $info['sport_slug'] );
 		$level = $info['level_id'] ? get_term( $info['level_id'], 'lf_league_level' ) : null;
+		if ( $this->is_resolved_placement( $info ) ) {
+			/* translators: %s: team name */
+			$request = sprintf( __( 'Placement request: placed on %s', 'leagueflow' ), $this->team_label( $info['team_id'] ) );
+		} elseif ( 'team' === $info['type'] ) {
+			/* translators: %s: team name */
+			$request = sprintf( __( 'Join %s', 'leagueflow' ), $this->team_label( $info['team_id'] ) );
+		} else {
+			$request = __( 'Needs placement', 'leagueflow' );
+		}
+
 		$parts = array(
-			'team' === $info['type'] ? sprintf(
-				/* translators: %s: team name */
-				__( 'Join %s', 'leagueflow' ),
-				$this->team_label( $info['team_id'] )
-			) : __( 'Needs placement', 'leagueflow' ),
+			$request,
 			! empty( $sport['label'] ) && $info['sport_slug'] ? $sport['label'] : __( 'Sport not specified', 'leagueflow' ),
 			$level instanceof \WP_Term ? $level->name : __( 'Level not specified', 'leagueflow' ),
 		);
 
 		return implode( ' · ', $parts );
+	}
+
+	/**
+	 * Whether an approved request started in the placement queue.
+	 *
+	 * Assigning a placement stores the chosen team on the request, which makes
+	 * it look like a named join request. The persisted lf_placed_from_queue
+	 * marker keeps its origin for display; review rules are unchanged.
+	 *
+	 * @param array<string, mixed> $info Request.
+	 * @return bool
+	 */
+	protected function is_resolved_placement( $info ) {
+		return 'team' === $info['type'] && 'approved' === $info['status'] && (bool) get_post_meta( $info['id'], 'lf_placed_from_queue', true );
+	}
+
+	/**
+	 * Teams to list as the player's current team in the request's sport.
+	 *
+	 * The service lists other teams only (for conflict checks), so the
+	 * requested team is added back when the player is already on it.
+	 *
+	 * @param array<string, mixed> $info Request.
+	 * @return int[]
+	 */
+	protected function current_team_ids( $info ) {
+		$team_ids = array_map( 'intval', $info['sport_team_ids'] );
+
+		if ( $info['team_id'] && in_array( 'already_member', $info['flags'], true ) && ! in_array( (int) $info['team_id'], $team_ids, true ) ) {
+			array_unshift( $team_ids, (int) $info['team_id'] );
+		}
+
+		return $team_ids;
 	}
 
 	/**
@@ -461,7 +500,9 @@ class Admin_Requests {
 		$labels  = self::action_labels();
 		$current = array();
 
-		foreach ( $info['sport_team_ids'] as $team_id ) {
+		$placed  = $this->is_resolved_placement( $info );
+
+		foreach ( $this->current_team_ids( $info ) as $team_id ) {
 			$current[] = $this->team_label( $team_id );
 		}
 		?>
@@ -470,9 +511,9 @@ class Admin_Requests {
 			<h2 id="leagueflow-request-detail-title"><?php echo esc_html( $this->player_label( $info ) ); ?></h2>
 			<dl class="leagueflow-detail-list">
 				<dt><?php esc_html_e( 'Request', 'leagueflow' ); ?></dt>
-				<dd><?php echo esc_html( 'team' === $info['type'] ? __( 'Join a team', 'leagueflow' ) : __( 'Needs placement', 'leagueflow' ) ); ?></dd>
+				<dd><?php echo esc_html( $placed ? __( 'Placement request', 'leagueflow' ) : ( 'team' === $info['type'] ? __( 'Join a team', 'leagueflow' ) : __( 'Needs placement', 'leagueflow' ) ) ); ?></dd>
 				<?php if ( 'team' === $info['type'] ) : ?>
-					<dt><?php esc_html_e( 'Requested team', 'leagueflow' ); ?></dt>
+					<dt><?php echo esc_html( $placed ? __( 'Assigned team', 'leagueflow' ) : __( 'Requested team', 'leagueflow' ) ); ?></dt>
 					<dd>
 						<?php
 						$team = get_post( $info['team_id'] );

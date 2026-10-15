@@ -488,6 +488,35 @@ says "Soccer"). PHP lint (51 files), asset-version, admin-asset, admin-filter
 and Python packaging tests pass. JS is unchanged, so calendar tests were not
 rerun; security/portal suites were not rerun (no change to those paths).
 
+## Request detail display (L-07, source only, 2026-10-15)
+
+Implemented and tested on disposable sites; **not installed** until root
+imports, builds and updates it. Admin display only: no change to
+`Join_Request_Service`, review actions, conflict rules, stored meta, history,
+capabilities, options, version or updater origin.
+
+- **Current team.** `inspect()` deliberately lists the player's *other* teams
+  in the sport (it feeds conflict checks), so a player already on the requested
+  team was shown "Current team in this sport: None". The detail panel now adds
+  the requested team back when the request is flagged `already_member`.
+- **Resolved placement.** Assigning a placement stores the chosen team on the
+  request, which made it read as "Join a team". When an approved request has the
+  persisted `lf_placed_from_queue` marker, the detail shows "Placement request"
+  and "Assigned team", and the list summary reads "Placement request: placed
+  on …". Pending placements still read "Needs placement".
+- Team names still go through the existing label, so a team the reviewer cannot
+  read stays "team #ID (not visible to you)"; anonymous and non-reviewing roles
+  still get no detail at all.
+
+Evidence (disposable `leagueflow.test` only): `tests/wordpress-admin.php`
+ADM-17 — named approval, resolved already-member, pending and assigned
+placement, pending request to another team (only the real team listed),
+private-team placement for admin/author/anonymous, service list unchanged,
+history unchanged, list summary. Admin suite 396/396 and security suite 696 on
+WordPress 7.1.3 and 6.5; the `5235d8bf` request screen fails 7 ADM-17 checks
+(389/396). PHP lint, admin-filter (11) and admin-asset (14) tests pass. JS, CSS
+and portal code are unchanged, so calendar and portal suites were not rerun.
+
 ## Finding checklist
 
 Implemented = in maintained source on `codex/leagueflow-admin-workflow`.
@@ -551,12 +580,13 @@ decision, generation, mapping or save was submitted on the real site.
 | T-05 | Team sidebar competition/season help inaccurate | final UI batch (text) | ADM-15 render; review | installed |
 | T-06 | Sport terms editable by anyone with manage_categories / created by edit_posts tag box | final UI batch | ADM-15 (Editor vs Administrator caps); mutation U-M5 | installed |
 | U-06b | Quick Edit and Calendar Event block-editor League Levels duplicated the details box | final UI batch | ADM-15 (Quick Edit filter, editor script per type); fixture-browser event sidebar | installed |
-| L-01 | Match Sport help promised a first-enabled fallback; unscoped match showed "Soccer" | polish | ADM-16; fixture-browser (new match, 6 widths) | not installed |
-| L-02 | Settings draw input lower than its neighbours when the label wraps | polish (CSS) | fixture-browser: equal input tops at 1440/1280/1024/900 (old: 16 px lower at 1280/1024/900); ADM-16 row class | not installed |
-| L-03 | Phone filter labels sat beside the previous select | polish | ADM-16 (DOM grouping on 5 filter bars); fixture-browser (label beside or above its own control, 6 widths) | not installed |
-| L-04 | Venues & availability had duplicate `input#submit` | polish | ADM-16 (no `id="submit"`, three own ids, names kept, all ids unique); fixture-browser | not installed |
-| L-05 | Venue availability list widened the page to 459 px on phones when rules exist | polish | ADM-16 (labelled scroll region); fixture-browser 390/320 | not installed |
+| L-01 | Match Sport help promised a first-enabled fallback; unscoped match showed "Soccer" | polish | ADM-16; fixture-browser (new match, 6 widths) | installed (`5235d8bf`); not retested live (no unscoped Add Match opened) |
+| L-02 | Settings draw input lower than its neighbours when the label wraps | polish (CSS) | fixture-browser: equal input tops at 1440/1280/1024/900 (old: 16 px lower at 1280/1024/900); ADM-16 row class | installed; live F12 (1440: win/draw/loss input tops equal) |
+| L-03 | Phone filter labels sat beside the previous select | polish | ADM-16 (DOM grouping on 5 filter bars); fixture-browser (label beside or above its own control, 6 widths) | installed; live F25/F30 (Requests 1440, Setup mapping 390: each label with its own control) |
+| L-04 | Venues & availability had duplicate `input#submit` | polish | ADM-16 (no `id="submit"`, three own ids, names kept, all ids unique); fixture-browser | installed; not retested live |
+| L-05 | Venue availability list widened the page to 459 px on phones when rules exist | polish | ADM-16 (labelled scroll region); fixture-browser 390/320 | installed; not observable live (the copy has no availability rules; none were added) |
 | L-06 | Match Competitions/Seasons tag boxes can create a term with no sport | not changed (documented limit) | — | installed as before |
+| L-07 | Request detail said "Current team in this sport: None" for a player already on the requested team, and an assigned placement read as "Join a team" | request-detail display (admin only; service unchanged) | ADM-17 (18 checks incl. 4 fixture checks; `5235d8bf` fails 7) | not installed (live repro F02 on owned request 2495) |
 
 Earlier usability IDs from the first admin audit map onto these rows: U-04
 (Matches density) → U-06/batch 2 columns; U-07 (menu sprawl) → B-01/C-05;
@@ -672,3 +702,77 @@ order beyond focus moving to the request panel, other sports' screens, and
 anonymous or participant roles. No fixtures, accounts or records were created,
 so nothing needed cleanup; opening the two edit screens set WordPress's normal
 edit lock only.
+
+## Installed-site acceptance with owned fixtures (2026-10-15, `5235d8bf`)
+
+Runtime: LeagueFlow 1.0.3 built from `5235d8bf`, installed by WordPress Manager
+job `42ff9cc3` (digest `4e36faa7…f864`, rollback retained); root confirmed all
+12 protected baseline sections identical before fixtures. Root created the
+owned fixtures (marker `lfaudit-20261014-145c27`: level 19, Volleyball
+competition 20, season 21 never current, private teams 2490/2491, private
+players 2492/2493 with `@example.invalid` contacts, requests 2494/2495). Browser:
+native Playwright Chromium compact, two sessions on separate turns, one-time
+admin handoffs (never recorded), diagnostics started on a blank tab before
+navigation, own WordPress session logged out, sessions released; the saved
+Clearcote profile was not touched. Viewport checks only — no physical device,
+WebKit or stock Firefox. Screenshots with real names stay private.
+
+Write flows on owned records only (all passed):
+
+| Case | Action | Result |
+|---|---|---|
+| F01 | Request 2494 (One → Team B) while One is on Team A | "Already on another team in this sport"; no Approve, only Decline/Dismiss |
+| F02 | Remove One from Team A in the player editor, save, reload | persisted |
+| F03 | Approve 2494 (e-mail box unticked; it defaults to ticked) | One on Team B; pending 53 → 51 with F04 |
+| F04 | Assign placement 2495 to Team A (e-mail unticked) | approved, one history entry, Team A roster = Player Two |
+| F05–F07 | Generate fixtures: Volleyball + level 19 + competition 20 + season 21; repeat | preview = the two private teams; created draft 2496; repeat "Every pairing in this scope already exists. Nothing was created." |
+| F08 | Matches list (Volleyball, drafts) | 2496 labelled Unscheduled, listed first; counts scoped |
+| F09–F11 | Edit match 2496 (venue), Team A 2490 (title), Player Two 2493 (number 77); reload | all persisted |
+| F16–F19 | Add Team / Player / Match / Calendar Event saved as marker-named drafts | 2497 / 2498 / 2499 / 2500 (adopted by root) |
+
+Read-only states (pass unless noted):
+
+| Case | Screen | Width | Result |
+|---|---|---|---|
+| F12 | Settings | 1440 | 3 columns; win/draw/loss input tops equal |
+| F13 | Settings | 320 | one column, no overflow, every field labelled |
+| F14/F15 | Public /standings/, Volleyball – Recreational expanded (admin) | 390 | minus icon, names aligned with or without logo, no overflow |
+| F20 | Request 2495 detail after reload | 1440 | **fail (L-07):** "Join a team", "Current team in this sport: None" beside "Already on the requested team"; fixed in source above |
+| F21 | Team 2497 (Add Team draft) edit | 1440 | saved sport Volleyball shown read-only; roster empty state with Add/All-players links |
+| F22 | Teams list, Soccer context | 1440 | breadcrumb + switcher; All (12) / Published (12) / Trash (4) scoped |
+| F23 | Legacy `page=leagueflow-sport-basketball` | 390 | redirects to Overview with `lf_sport=basketball`; Needs attention, Work on, counts; no overflow |
+| F24 | Settings | 390 | one column, labelled, scoring overrides region |
+| F25 | Requests list, Volleyball | 1440 | tabs, status filters, labelled filter fields, flags |
+| F26 | Players list, Basketball | 390 | All (122) / Published (48) / Private (74) / Trash (1); paging |
+| F27 | Keyboard: Enter on a Players row "Show more details" | 390 | row expands (Sport, Level, Team…), focus stays on the toggle |
+| F28 | Matches list, Volleyball | 390 | All (22) / Drafts (2) / Trash (123) / Unscheduled (2); "unscheduled first" caption |
+| F30 | Setup check mapping **preview** (draft 2497 → competition 20) | 390 | preview listed exactly 2497; Apply not clicked (copy nit: "1 records") |
+| F31 | Public /standings/ expanded (admin) | 1440 | expanded with focus on the summary; see observation 1 |
+| F32 | Public /standings/ expanded, **logged out** | 390 | 10 teams, no draft, private audit teams hidden; see observation 2 |
+| F33 | Calendar Event 2500 sport field | 1440 | **blocked:** the block editor's meta-box pane did not expand through the browser tool, and snapshots do not expose select values |
+
+Console (both sessions): jQuery Migrate logs, WordPress core 403 on the logout
+confirmation page, an aborted editor blob request and the core iframe-styles
+warning; no page errors and no LeagueFlow-attributed console error.
+
+Observations, not fixed in this batch:
+
+1. Logged in as administrator, the public standings list the owned **draft**
+   team 2497 as a row in Volleyball – Recreational; logged out it is not shown.
+   Admin-only exposure of drafts in a public block; worth a follow-up decision.
+2. Public standings render an empty "0 teams" group for every sport when a
+   shared level has no visible teams in that sport (seen logged out for the
+   audit level in Soccer, Basketball and Volleyball). It disappears once the
+   audit level is cleaned up.
+3. The Approve/Assign "E-mail the player" box is ticked by default (local mail
+   guard stayed on; it was unticked for every owned decision).
+4. Requests links with unknown query names fall back to the default list
+   silently (`type`/`status`/`request_id` are the real ones).
+
+Not covered live: the Calendar Event sport field (F33), Venues & availability
+with rules (none exist; none were added), keyboard order across whole screens
+(only the request panel focus, row toggle and standings summary were checked),
+Soccer/Basketball edit screens, participant roles, physical devices. Cleanup of
+the owned fixtures and drafts 2496–2500 is root's step; this document does not
+claim it.
+
