@@ -93,12 +93,11 @@ Status columns are separate on purpose:
 
 ## Behaviour changed in batches 2–3 (navigation, context, requests)
 
-- **One LeagueFlow menu.** Overview, Teams, Players, Requests, Matches,
-  Generate fixtures, Venues & availability, Calendar Events, Standings,
-  Knockout Brackets, Competitions, Seasons, League Levels (all sports), Sports,
-  Utilities, Settings — in workflow order. The per-sport top-level menus and
-  their 17 entries each (including the Add links) are gone. WordPress supports
-  one submenu level, so the sport is a context on the screen, not a menu.
+- **LeagueFlow and enabled sport menus.** LeagueFlow retains the shared workflow
+  screens. Each enabled sport also has its own sidebar entry and filtered links
+  to the same setup, roster, request, match, scheduling and standings screens.
+  Global settings and the shared League Levels list stay under LeagueFlow.
+  Add links remain on the relevant screens. Disabled sports have no sidebar entry.
 - **Sport context bar** above every LeagueFlow screen: breadcrumb (LeagueFlow ›
   sport › level › screen) and an "All sports / Soccer / …" switcher that keeps
   the current screen and resets paging and sport-specific filters. Edit/add
@@ -823,3 +822,24 @@ The populated-table responsive matrix and role/security suites are disposable-si
 coverage, explicitly separate from these actual admin/browser checks. Admin-only
 draft preview rows, empty shared-level groups, notification defaults and generic
 competition/season tag creation remain the documented observations above.
+
+## October 15 follow-up: sidebar and calendar completeness
+
+Enabled sport sidebar entries are restored without replacing the sport switcher.
+A scoped list/edit screen highlights its sport; All sports returns to the shared
+menu. Existing capabilities and legacy custom-page redirects remain in force.
+
+The public calendar initially embedded only its first 20 chronological records.
+Its default batch is now 100, with an explicit next-page button when more records
+exist. Every request stays within the public endpoint's 100-record cap and retains
+its original filters. Failed pages can be retried without clearing loaded events;
+new sport/type chips appear as later batches arrive. No automatic historical crawl
+or fixture creation is part of this change.
+
+Read-only production inventory on October 15 found 68 dated public matches:
+Volleyball only, 32 in October, 31 in November and 5 in December. Soccer and
+Basketball had no dated matches in that public feed. Their schedules must be
+entered or generated from reviewed fixtures and venue availability; enabling a
+sport alone does not create fixtures. No live database or media was changed by
+this inventory. Calendar regression coverage includes page 2, duplicate clicks,
+failed requests, deduplication and a sport first appearing after the first batch.

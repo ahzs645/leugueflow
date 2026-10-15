@@ -389,7 +389,7 @@ class Renderer {
 				'show_day'         => '1',
 				'list_initial'     => 30,
 				'list_more'        => 15,
-				'limit'            => 20,
+				'limit'            => 100,
 			),
 			$atts,
 			'match_calendar'
@@ -413,8 +413,7 @@ class Renderer {
 			$initial_view = 'month';
 		}
 
-		$events = $this->get_calendar_items(
-			array(
+		$calendar_filters = array(
 				'competition'      => $atts['competition'],
 				'season'           => resolve_season_context( $atts['season'], $this->season_sport_context( $atts['sport'], $atts['competition'] ) ),
 				'sport'            => $atts['sport'],
@@ -423,9 +422,10 @@ class Renderer {
 				'include_knockout' => '' === $atts['include_knockout'] ? null : ! empty( $atts['include_knockout'] ),
 				'include_events'   => $include_events,
 				'event_type'       => $atts['event_type'],
-				'limit'            => (int) $atts['limit'],
-			)
-		);
+				'limit'            => public_collection_limit( $atts['limit'] ),
+			);
+		$calendar_page = $this->get_calendar_page( $calendar_filters );
+		$events = $calendar_page['items'];
 
 		$sport_data = $this->build_calendar_sport_data( $events );
 		$type_data  = $this->build_calendar_type_data( $events );
@@ -485,9 +485,16 @@ class Renderer {
 
 		$payload = array(
 			'events' => $events,
+			'pagination' => array(
+				'total' => $calendar_page['total'],
+				'nextPage' => $calendar_page['pages'] > 1 ? 2 : null,
+				'perPage' => $calendar_filters['limit'],
+			),
 			'sports' => $sports,
 			'types'  => $types,
 			'config' => array(
+				'calendarEndpoint' => rest_url( 'leagueflow/v1/calendar/events' ),
+				'calendarFilters' => array_diff_key( $calendar_filters, array( 'limit' => true ) ),
 				'startOfWeek'   => (int) get_option( 'start_of_week', 1 ),
 				'today'         => wp_date( 'Y-m-d' ),
 				'monthNames'    => $month_names,
@@ -523,6 +530,8 @@ class Renderer {
 				'vs'             => __( 'vs', 'leagueflow' ),
 				'prev'           => __( 'Previous', 'leagueflow' ),
 				'next'           => __( 'Next', 'leagueflow' ),
+				'batchProgress'  => __( '%1$d of %2$d scheduled events loaded.', 'leagueflow' ),
+				'batchError'     => __( 'Could not load the next schedule page. Please retry.', 'leagueflow' ),
 				'loadMore'       => __( 'Load more events', 'leagueflow' ),
 				'registration'   => __( 'Registration required', 'leagueflow' ),
 				'register'       => __( 'Register', 'leagueflow' ),

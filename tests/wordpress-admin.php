@@ -520,14 +520,19 @@ lfa_check( $admin->count_views( 'lf_player', 'private' ) >= 4, 'ADM-07 administr
 $_GET = array();
 
 // ---------------------------------------------------------------------------
-// ADM-08 · One LeagueFlow menu, sport context, legacy aliases (B-01, C-05, C-06, N-06, C-10, C-14, U-06).
+// ADM-08 · Shared screens, enabled sport menus, context and legacy aliases (B-01, C-05, C-06, N-06, C-10, C-14, U-06).
 // ---------------------------------------------------------------------------
 global $menu, $submenu, $_registered_pages, $pagenow, $typenow, $taxnow;
 $menu = array(); $submenu = array();
 $admin->register_menus();
 $slugs = wp_list_pluck( $submenu['leagueflow'] ?? array(), 2 );
 lfa_check( array( 'leagueflow', 'leagueflow-setup', 'edit.php?post_type=lf_team', 'edit.php?post_type=lf_player', 'leagueflow-requests', 'edit.php?post_type=lf_match', 'leagueflow-fixtures', 'leagueflow-fields', 'edit.php?post_type=lf_calendar_event', 'leagueflow-standings', 'leagueflow-brackets', 'edit-tags.php?taxonomy=lf_competition&post_type=lf_match', 'edit-tags.php?taxonomy=lf_season&post_type=lf_match', 'edit-tags.php?taxonomy=lf_league_level&post_type=lf_match', 'leagueflow-sports', 'leagueflow-utilities', 'leagueflow-settings' ) === array_values( $slugs ), 'ADM-08 one LeagueFlow menu with 17 screens in workflow order' );
-lfa_check( 1 === count( array_filter( wp_list_pluck( $menu, 2 ), static function ( $slug ) { return 0 === strpos( (string) $slug, 'leagueflow' ); } ) ), 'ADM-08 no per-sport top-level menus' );
+lfa_check( 1 + count( $sports->get_enabled_sport_slugs() ) === count( array_filter( wp_list_pluck( $menu, 2 ), static function ( $slug ) { return 0 === strpos( (string) $slug, 'leagueflow' ); } ) ), 'ADM-08 each enabled sport has a top-level menu' );
+foreach ( $sports->get_enabled_sport_slugs() as $sport_slug ) {
+	$sport_links = wp_list_pluck( $submenu[ 'leagueflow-sport-' . $sport_slug ] ?? array(), 2 );
+	lfa_check( in_array( 'edit.php?post_type=lf_match&lf_sport=' . $sport_slug, $sport_links, true ), 'ADM-08 sport menu opens its filtered Matches list' );
+}
+lfa_check( ! in_array( 'leagueflow-sport-rugby', wp_list_pluck( $menu, 2 ), true ), 'ADM-08 a disabled sport has no sidebar entry' );
 lfa_check( ! preg_grep( '/^leagueflow-sport-|^post-new\.php|^leagueflow-placements$/', $slugs ), 'ADM-08 no per-sport, Add or Placements clutter in the sidebar' );
 lfa_check( false !== strpos( implode( '', wp_list_pluck( $submenu['leagueflow'], 0 ) ), 'League Levels (all sports)' ), 'ADM-08 shared League Levels are labelled global' );
 $legacy_hook = get_plugin_page_hookname( 'leagueflow-sport-cricket-fixtures', '' );
@@ -546,7 +551,7 @@ wp_set_current_user( $admin_id );
 // Edit screen keeps the record's sport (B-01).
 $pagenow = 'post.php'; $typenow = 'lf_team'; $GLOBALS['post_type'] = 'lf_team';
 $_GET = array( 'post' => $teams[0], 'action' => 'edit' ); $_REQUEST = $_GET;
-lfa_check( 'leagueflow' === $admin->filter_admin_menu_parent_file( 'edit.php' ) && 'edit.php?post_type=lf_team' === $admin->filter_admin_menu_submenu_file( '', 'leagueflow' ), 'ADM-08 team edit screen highlights LeagueFlow > Teams' );
+lfa_check( 'leagueflow-sport-cricket' === $admin->filter_admin_menu_parent_file( 'edit.php' ) && 'edit.php?post_type=lf_team&lf_sport=cricket' === $admin->filter_admin_menu_submenu_file( '', 'leagueflow-sport-cricket' ), 'ADM-08 team edit screen highlights its sport > Teams' );
 $bar = lfa_render( array( $admin, 'render_context_bar' ) );
 lfa_check( false !== strpos( $bar, 'Back to Teams (Cricket)' ) && false !== strpos( $bar, 'post_type=lf_team&#038;lf_sport=cricket' ), 'ADM-08 edit screen links back to the list in the record\'s sport' );
 lfa_check( false !== strpos( $admin->filter_add_new_url( admin_url( 'post-new.php?post_type=lf_team' ), 'post-new.php?post_type=lf_team' ), 'lf_sport=cricket' ), 'ADM-08 Add New keeps the record\'s sport' );

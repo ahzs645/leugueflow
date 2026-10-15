@@ -320,6 +320,19 @@ class Admin {
 			add_submenu_page( 'leagueflow', $item[0], $item[1], $item[2], $item[3], $item[4] );
 		}
 
+		// Each enabled sport opens the same screens with an explicit sport context.
+		$position = 26;
+		foreach ( $this->sports_manager->get_enabled_sports() as $sport_slug => $sport ) {
+			$parent = 'leagueflow-sport-' . $sport_slug;
+			add_menu_page( $sport['label'], $sport['menu_label'], 'edit_posts', $parent, array( $this, 'render_sport_dashboard_page' ), $this->sports_manager->get_menu_icon_data_uri( $sport_slug ), $position++ );
+			add_submenu_page( $parent, __( 'Overview', 'leagueflow' ), __( 'Overview', 'leagueflow' ), 'edit_posts', $parent, array( $this, 'render_sport_dashboard_page' ) );
+			foreach ( array_slice( $items, 1, 12 ) as $item ) {
+				$url = false !== strpos( $item[3], '.php?' ) ? $item[3] : 'admin.php?page=' . $item[3];
+				$url = add_query_arg( 'lf_sport', $sport_slug, $url );
+				add_submenu_page( $parent, $item[0], $item[1], $item[2], $url );
+			}
+		}
+
 		$this->register_legacy_page_aliases();
 	}
 
@@ -336,7 +349,6 @@ class Admin {
 		foreach ( $this->sports_manager->get_enabled_sport_slugs() as $sport_slug ) {
 			$context = array( 'lf_sport' => $sport_slug );
 
-			$aliases[ 'leagueflow-sport-' . $sport_slug ]                = array( 'edit_posts', 'leagueflow', $context );
 			$aliases[ 'leagueflow-sport-' . $sport_slug . '-fixtures' ]  = array( 'leagueflow_manage_fixtures', 'leagueflow-fixtures', $context );
 			$aliases[ 'leagueflow-sport-' . $sport_slug . '-standings' ] = array( 'edit_posts', 'leagueflow-standings', $context );
 			$aliases[ 'leagueflow-sport-' . $sport_slug . '-brackets' ]  = array( 'edit_posts', 'leagueflow-brackets', $context );
@@ -452,7 +464,7 @@ class Admin {
 	 * @return void
 	 */
 	public function render_context_bar() {
-		if ( 'leagueflow' !== $this->get_current_leagueflow_admin_menu_slug() ) {
+		if ( ! $this->get_current_leagueflow_admin_menu_slug() ) {
 			return;
 		}
 
@@ -501,6 +513,9 @@ class Admin {
 
 					foreach ( $choices as $slug => $choice ) {
 						$url = remove_query_arg( $drop );
+						if ( 0 === strpos( $page, 'leagueflow-sport-' ) ) {
+							$url = add_query_arg( 'page', 'leagueflow', $url );
+						}
 						$url = $slug ? add_query_arg( 'lf_sport', $slug, $url ) : $url;
 						printf(
 							'<li><a href="%1$s"%2$s>%3$s</a></li>',
@@ -5494,6 +5509,11 @@ class Admin {
 	 */
 	protected function get_current_leagueflow_admin_menu_slug() {
 		$page = $this->get_current_admin_plugin_page_slug();
+		$sport = $this->get_context_sport_slug();
+		$global = in_array( $page, array( 'leagueflow-sports', 'leagueflow-settings', 'leagueflow-utilities' ), true ) || 'lf_league_level' === $this->get_current_admin_taxonomy();
+		if ( $sport && ! $global && ( 0 === strpos( $page, 'leagueflow' ) || in_array( $this->get_current_admin_post_type(), $this->get_leagueflow_admin_post_types(), true ) || isset( $this->get_leagueflow_taxonomy_submenu_files()[ $this->get_current_admin_taxonomy() ] ) ) ) {
+			return 'leagueflow-sport-' . $sport;
+		}
 
 		if ( $page ) {
 			return ( 'leagueflow' === $page || 0 === strpos( $page, 'leagueflow-' ) ) ? 'leagueflow' : '';
@@ -5516,28 +5536,32 @@ class Admin {
 	 * @return string
 	 */
 	protected function get_current_leagueflow_admin_submenu_file( $parent_file ) {
-		unset( $parent_file );
+		$sport_parent = 0 === strpos( $parent_file, 'leagueflow-sport-' );
+		$sport = $sport_parent ? $this->get_context_sport_slug() : '';
+		$scoped = static function ( $file ) use ( $sport ) {
+			return $sport ? add_query_arg( 'lf_sport', $sport, $file ) : $file;
+		};
 
 		$page = $this->get_current_admin_plugin_page_slug();
 
 		if ( $page && ( 'leagueflow' === $page || 0 === strpos( $page, 'leagueflow-' ) ) ) {
-			return $page;
+			return $sport_parent ? ( $page === $parent_file || 'leagueflow' === $page ? $parent_file : $scoped( 'admin.php?page=' . $page ) ) : $page;
 		}
 
 		$taxonomy_files = $this->get_leagueflow_taxonomy_submenu_files();
 		$taxonomy       = $this->get_current_admin_taxonomy();
 
 		if ( isset( $taxonomy_files[ $taxonomy ] ) ) {
-			return $taxonomy_files[ $taxonomy ];
+			return $scoped( $taxonomy_files[ $taxonomy ] );
 		}
 
 		$post_type = $this->get_current_admin_post_type();
 
 		if ( 'lf_join_request' === $post_type ) {
-			return 'leagueflow-requests';
+			return $sport_parent ? $scoped( 'admin.php?page=leagueflow-requests' ) : 'leagueflow-requests';
 		}
 
-		return in_array( $post_type, $this->get_leagueflow_admin_post_types(), true ) ? 'edit.php?post_type=' . $post_type : '';
+		return in_array( $post_type, $this->get_leagueflow_admin_post_types(), true ) ? $scoped( 'edit.php?post_type=' . $post_type ) : '';
 	}
 
 	/**
@@ -6270,6 +6294,9 @@ class Admin {
 	 */
 	protected function get_requested_sport_slug() {
 		$value = wp_unslash( $_POST['leagueflow_requested_sport'] ?? $_GET['lf_sport'] ?? $_GET['sport'] ?? '' ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		if ( '' === $value && preg_match( '/^leagueflow-sport-(.+?)(?:-(?:fixtures|standings|brackets|fields))?$/', $this->get_current_admin_plugin_page_slug(), $matches ) ) {
+			$value = $matches[1];
+		}
 
 		if ( is_numeric( $value ) ) {
 			$term = get_term( absint( $value ), 'lf_sport' );

@@ -290,8 +290,10 @@ that team's WordPress password cookie and includes its fixtures once unlocked;
 the team's unlocked profile and recent matches remain available. Staff retain
 private-team access through WordPress's normal permissions.
 
-Embedded match lists and `[match_calendar]` also default to 20 and are capped at
-100 records through their `limit` attribute. They no longer load all historical
+Embedded match lists default to 20. `[match_calendar]` starts with up to 100
+records and provides **Load next schedule page** whenever more records exist.
+Each explicit request is capped at 100 and retains the original shortcode filters.
+An explicit `limit` sets the batch size (maximum 100). These views never automatically load all historical
 records; use date/taxonomy scopes or the paginated REST endpoints for larger feeds.
 
 Both `POST /calendar/events` and `POST /events/create-calendar-event` require
