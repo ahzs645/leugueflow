@@ -4,9 +4,11 @@ if ( ! defined( 'WP_CLI' ) || ! WP_CLI || '1' !== getenv( 'LEAGUEFLOW_DISPOSABLE
 	throw new RuntimeException( 'Use only the disposable leagueflow.test installation.' );
 }
 
-$lfapi_posts = array();
+$GLOBALS['lfapi_posts'] = array();
+$lfapi_posts =& $GLOBALS['lfapi_posts'];
 $lfapi_terms = array();
-$lfapi_checks = 0;
+$GLOBALS['lfapi_checks'] = 0;
+$lfapi_checks =& $GLOBALS['lfapi_checks'];
 $lfapi_zone = get_option( 'timezone_string' );
 $lfapi_user = get_current_user_id();
 function lfapi_check( $condition, $message ) {
@@ -130,7 +132,7 @@ try {
 	lfapi_check( lfapi_request( 'match-events', array(), 'POST' )->get_status() >= 400 && lfapi_request( 'match-results', array(), 'DELETE' )->get_status() >= 400, 'Public feeds offer no mutation route.' );
 	lfapi_check( is_array( lfapi_request( 'matches', array( 'competition' => $ctx['lf_competition'], 'limit' => 1 ) )->get_data() ), 'Legacy matches response remains available.' );
 	$routes = rest_get_server()->get_routes();
-	lfapi_check( isset( $routes['/leagueflow/v1/match-events'][0]['args']['per_page'], $routes['/leagueflow/v1/match-results'][0]['args']['date'] ), 'Request contract is discoverable through native REST route metadata.' );
+	lfapi_check( isset( $routes['/leagueflow/v1/match-events/?'][0]['args']['per_page'], $routes['/leagueflow/v1/match-results/?'][0]['args']['date'] ), 'Request contract is discoverable through native REST route metadata.' );
 	$many = array();
 	for ( $day = 1; $day <= 24; ++$day ) { $many[] = $match( sprintf( '2031-01-%02d 18:30', $day ), 'finished', array( 'lf_home_score' => '1', 'lf_away_score' => '0' ) ); }
 	$range = array( 'competition' => $ctx['lf_competition'], 'start_date' => '2031-01-01', 'end_date' => '2031-01-31' );

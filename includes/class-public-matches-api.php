@@ -18,7 +18,7 @@ class Public_Matches_API {
 
 	public function register_routes() {
 		foreach ( array( 'match-events', 'match-results' ) as $route ) {
-			register_rest_route( 'leagueflow/v1', '/' . $route, array(
+			register_rest_route( 'leagueflow/v1', '/' . $route . '/?', array(
 				'methods'             => \WP_REST_Server::READABLE,
 				'permission_callback' => '__return_true',
 				'callback'            => array( $this, 'get_collection' ),
