@@ -2986,3 +2986,10 @@ body:not(.home) .unbc-page-body > .wp-block-post-content > .leagueflow-portal.al
 		width: 100%;
 	}
 }
+
+/* Respect hidden filter/pagination containers even when the component uses flex. */
+.leagueflow-calendar [data-calendar-sport-filters][hidden],
+.leagueflow-calendar [data-calendar-type-filters][hidden],
+.leagueflow-calendar [data-calendar-pagination][hidden] {
+	display: none;
+}

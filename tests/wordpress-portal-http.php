@@ -264,7 +264,15 @@ try {
 		lfh_expect( 'team-denied', $c['captain_b']->submit( array_merge( $b_review, array( 'lf_join_request_id' => $r1, 'lf_join_decision' => 'approve' ) ) ), 'Captain B approving a team A request' );
 		lfh_fresh(); lfh_assert( 'pending' === get_post_meta( $r1, 'lf_request_status', true ) && ! \LeagueFlow\player_has_team( $p_j, $team_a ), 'Forged review changed the request.' );
 		$approve = array_merge( $c['captain_a']->form( 'review_join_request', array( 'lf_join_request_id' => $r1 ), $team_a ), array( 'lf_join_decision' => 'approve' ) );
+		lfh_assert( 16 === strlen( (string) ( $approve['lf_request_state'] ?? '' ) ), 'The rendered review form does not carry the request state.' );
+		lfh_expect( 'join-request-changed', $c['captain_a']->submit( array_diff_key( $approve, array( 'lf_request_state' => 1 ) ) ), 'Approval with the state field removed' );
+		// The request changes after the captain loaded the page (another reviewer's view of it differs).
+		update_post_meta( $r1, 'lf_player_id', $p_j2 );
+		lfh_expect( 'join-request-changed', $c['captain_a']->submit( $approve ), 'Approval from a page loaded before the request changed' );
+		update_post_meta( $r1, 'lf_player_id', $p_j );
+		lfh_fresh(); lfh_assert( 'pending' === get_post_meta( $r1, 'lf_request_status', true ) && ! \LeagueFlow\player_has_team( $p_j, $team_a ) && ! \LeagueFlow\player_has_team( $p_j2, $team_a ) && 0 === count( \LeagueFlow\Join_Request_Service::shared()->get_history( $r1 ) ), 'A stale portal form changed the request.' );
 		lfh_expect( 'join-request-approved', $c['captain_a']->submit( $approve ), 'Owner approval' );
+		lfh_fresh(); lfh_assert( 1 === count( \LeagueFlow\Join_Request_Service::shared()->get_history( $r1 ) ), 'Approval was not recorded exactly once.' );
 		lfh_expect( 'team-denied', $c['captain_a']->submit( $approve ), 'Duplicate approval' );
 		lfh_fresh(); lfh_assert( 'approved' === get_post_meta( $r1, 'lf_request_status', true ) && \LeagueFlow\player_has_team( $p_j, $team_a ), 'Approval did not add the player.' );
 		lfh_expect( 'join-request-declined', $c['captain_b']->submit( array_merge( $b_review, array( 'lf_join_decision' => 'decline' ) ) ), 'Owner rejection' );

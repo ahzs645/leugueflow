@@ -138,7 +138,8 @@
 		var config = data.config || {};
 		var strings = data.strings || {};
 		var sports = data.sports || [];
-		var events = ( data.events || [] ).map( function ( event ) {
+		function normalizeEvents( items ) {
+		return items.map( function ( event ) {
 			event.startDate = parseWallClock( event.start );
 			event.endDate = parseWallClock( event.end );
 			event.startInstant = new Date( event.start );
@@ -159,6 +160,8 @@
 		} ).filter( function ( event ) {
 			return ! isNaN( event.startDate.getTime() );
 		} );
+		}
+		var events = normalizeEvents( data.events || [] );
 
 		var startOfWeek = parseInt( config.startOfWeek, 10 ) || 0;
 		var monthNames = config.monthNames || [];
@@ -175,8 +178,6 @@
 		var clearBtn = root.querySelector( '[data-calendar-clear]' );
 		var searchInput = root.querySelector( '[data-calendar-search]' );
 		var viewButtons = root.querySelectorAll( '[data-calendar-view]' );
-		var sportChips = root.querySelectorAll( '[data-sport]' );
-		var typeChips = root.querySelectorAll( '[data-type]' );
 		var dialog = root.querySelector( '[data-calendar-dialog]' );
 		var dialogContent = root.querySelector( '[data-calendar-dialog-content]' );
 		var mobileQuery = window.matchMedia ? window.matchMedia( '(max-width: 760px)' ) : null;
@@ -977,6 +978,81 @@
 			return 'data:text/calendar;charset=utf8,' + encodeURIComponent( lines.join( '\r\n' ) );
 		}
 
+		var pageButton = root.querySelector( '[data-calendar-load-page]' );
+		var pageStatus = root.querySelector( '[data-calendar-progress]' );
+		var pageBox = root.querySelector( '[data-calendar-pagination]' );
+		var pagination = data.pagination || {};
+		var loadingPage = false;
+
+		function showPageProgress( message ) {
+			if ( pageStatus ) {
+				pageStatus.textContent = message || ( strings.batchProgress || '%1$d of %2$d scheduled events loaded.' ).replace( '%1$d', events.length ).replace( '%2$d', pagination.total );
+			}
+			if ( pageBox ) { pageBox.hidden = ! pagination.nextPage; }
+			if ( pageButton ) { pageButton.disabled = loadingPage; }
+		}
+
+		function refreshLoadedFilters( selector, attribute, labelField, allLabel, selected ) {
+			var group = root.querySelector( selector );
+			if ( ! group ) { return; }
+			var choices = {};
+			events.forEach( function ( event ) {
+				var key = event[ attribute ];
+				if ( key ) {
+					if ( ! choices[ key ] ) { choices[ key ] = { label: event[ labelField ] || key, count: 0 }; }
+					choices[ key ].count++;
+				}
+			} );
+			group.textContent = '';
+			[ '' ].concat( Object.keys( choices ).sort() ).forEach( function ( key ) {
+				var control = button( 'leagueflow-calendar__chip', key ? choices[ key ].label + ' (' + choices[ key ].count + ')' : allLabel );
+				control.dataset[ attribute === 'sport' ? 'sport' : 'type' ] = key;
+				control.classList.toggle( 'is-active', selected === key );
+				control.setAttribute( 'aria-pressed', selected === key ? 'true' : 'false' );
+				group.appendChild( control );
+			} );
+			group.hidden = Object.keys( choices ).length <= 1;
+		}
+
+		if ( pageButton && config.calendarEndpoint && pagination.nextPage ) {
+			pageButton.addEventListener( 'click', async function () {
+				if ( loadingPage || ! pagination.nextPage ) { return; }
+				loadingPage = true;
+				showPageProgress();
+				try {
+					var endpoint = new URL( config.calendarEndpoint, window.location.href );
+					if ( endpoint.origin !== window.location.origin ) { throw new Error( 'Calendar endpoint must be on this site.' ); }
+					Object.keys( config.calendarFilters || {} ).forEach( function ( key ) {
+						var value = config.calendarFilters[ key ];
+						if ( value !== null && value !== '' ) { endpoint.searchParams.set( key, value === false ? '0' : String( value ) ); }
+					} );
+					endpoint.searchParams.set( 'per_page', Math.min( 100, pagination.perPage || 100 ) );
+					endpoint.searchParams.set( 'page', pagination.nextPage );
+					var response = await fetch( endpoint.toString(), { credentials: 'omit', headers: { Accept: 'application/json' } } );
+					if ( ! response.ok ) { throw new Error( 'Calendar request failed.' ); }
+					var result = await response.json();
+					if ( ! Array.isArray( result.events ) || result.events.length > 100 || ! result.pagination || result.pagination.currentPage !== pagination.nextPage ) { throw new Error( 'Invalid calendar page.' ); }
+					var nextPage = result.pagination.nextPage;
+					if ( nextPage !== null && ( ! Number.isInteger( nextPage ) || nextPage !== pagination.nextPage + 1 || nextPage > 10000 ) ) { throw new Error( 'Invalid next page.' ); }
+					var ids = new Set( events.map( function ( event ) { return event.id; } ) );
+					events = events.concat( normalizeEvents( result.events ).filter( function ( event ) {
+						if ( ids.has( event.id ) ) { return false; }
+						ids.add( event.id ); return true;
+					} ) ).sort( function ( a, b ) { return a.startDate - b.startDate || String( a.id ).localeCompare( String( b.id ) ); } );
+					( result.sports || [] ).forEach( function ( sport ) { sportColors[ sport.slug ] = sport.color; } );
+					pagination.nextPage = nextPage;
+					pagination.total = result.total;
+					refreshLoadedFilters( '[data-calendar-sport-filters]', 'sport', 'sportLabel', strings.allSports || 'All sports', state.sport );
+					refreshLoadedFilters( '[data-calendar-type-filters]', 'kind', 'kindLabel', strings.allTypes || 'All types', state.type );
+					render();
+					loadingPage = false; showPageProgress();
+				} catch ( error ) {
+					loadingPage = false; showPageProgress( strings.batchError || 'Could not load the next schedule page. Please retry.' );
+				}
+			} );
+			showPageProgress();
+		}
+
 		prevBtn.addEventListener( 'click', function () {
 			shiftRange( -1 );
 		} );
@@ -1007,24 +1083,15 @@
 			} );
 		} );
 
-		sportChips.forEach( function ( chip ) {
-			chip.addEventListener( 'click', function () {
-				state.sport = this.dataset.sport || '';
-				state.selectedDay = null;
-				state.listCount = listInitial;
-				setChipState( sportChips, 'sport', state.sport );
-				render();
-			} );
-		} );
-
-		typeChips.forEach( function ( chip ) {
-			chip.addEventListener( 'click', function () {
-				state.type = this.dataset.type || '';
-				state.selectedDay = null;
-				state.listCount = listInitial;
-				setChipState( typeChips, 'type', state.type );
-				render();
-			} );
+		root.addEventListener( 'click', function ( event ) {
+			var chip = event.target.closest( '[data-sport], [data-type]' );
+			if ( ! chip || ! root.contains( chip ) ) { return; }
+			var isSport = chip.hasAttribute( 'data-sport' );
+			state[ isSport ? 'sport' : 'type' ] = chip.dataset[ isSport ? 'sport' : 'type' ] || '';
+			state.selectedDay = null;
+			state.listCount = listInitial;
+			setChipState( root.querySelectorAll( isSport ? '[data-sport]' : '[data-type]' ), isSport ? 'sport' : 'type', state[ isSport ? 'sport' : 'type' ] );
+			render();
 		} );
 
 		if ( searchInput ) {
@@ -1092,8 +1159,8 @@
 			state.selectedDay = dayKeyFromDate( state.date );
 		}
 
-		setChipState( sportChips, 'sport', state.sport );
-		setChipState( typeChips, 'type', state.type );
+		setChipState( root.querySelectorAll( '[data-sport]' ), 'sport', state.sport );
+		setChipState( root.querySelectorAll( '[data-type]' ), 'type', state.type );
 		render();
 	}
 

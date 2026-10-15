@@ -42,21 +42,29 @@ class Assets {
 			'leagueflow-admin',
 			LEAGUEFLOW_URL . 'assets/css/admin.css',
 			array(),
-			LEAGUEFLOW_VERSION
+			$this->asset_version( 'assets/css/admin.css' )
+		);
+
+		wp_register_script(
+			'leagueflow-admin-ui',
+			LEAGUEFLOW_URL . 'assets/js/admin.js',
+			array(),
+			$this->asset_version( 'assets/js/admin.js' ),
+			true
 		);
 
 		wp_register_style(
 			'leagueflow-editor',
 			LEAGUEFLOW_URL . 'assets/css/editor.css',
 			array( 'wp-edit-blocks' ),
-			LEAGUEFLOW_VERSION
+			$this->asset_version( 'assets/css/editor.css' )
 		);
 
 		wp_register_script(
 			'leagueflow-blocks',
 			LEAGUEFLOW_URL . 'assets/js/blocks.js',
 			array( 'wp-blocks', 'wp-components', 'wp-element', 'wp-i18n', 'wp-block-editor', 'wp-server-side-render' ),
-			LEAGUEFLOW_VERSION,
+			$this->asset_version( 'assets/js/blocks.js' ),
 			true
 		);
 
@@ -78,7 +86,7 @@ class Assets {
 	}
 
 	/**
-	 * Cache key for a frequently changed asset: plugin version plus a short
+	 * Cache key for every plugin asset: plugin version plus a short
 	 * content hash. Packages stamp every file with the same date, so a
 	 * modification time only changes if the installer rewrites it; the hash
 	 * changes exactly when the file's bytes change, so a development update with
@@ -115,11 +123,15 @@ class Assets {
 			'edit-lf_match',
 			'lf_calendar_event',
 			'edit-lf_calendar_event',
+			'lf_join_request',
+			'edit-lf_join_request',
 			'toplevel_page_leagueflow',
 			'leagueflow_page_leagueflow-sports',
 			'leagueflow_page_leagueflow-fields',
 			'leagueflow_page_leagueflow-fixtures',
 			'leagueflow_page_leagueflow-placements',
+			'leagueflow_page_leagueflow-requests',
+			'leagueflow_page_leagueflow-setup',
 			'leagueflow_page_leagueflow-utilities',
 			'leagueflow_page_leagueflow-standings',
 			'leagueflow_page_leagueflow-brackets',
@@ -137,6 +149,7 @@ class Assets {
 			false !== strpos( $screen->id, 'leagueflow-sport-' )
 		) {
 			wp_enqueue_style( 'leagueflow-admin' );
+			wp_enqueue_script( 'leagueflow-admin-ui' );
 		}
 	}
 

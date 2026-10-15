@@ -82,7 +82,7 @@ class Renderer {
 		);
 
 		$competition_id  = resolve_term_id( $atts['competition'], 'lf_competition' );
-		$season_id       = resolve_season_context( $atts['season'] );
+		$season_id       = resolve_season_context( $atts['season'], $this->season_sport_context( $atts['sport'], $competition_id ) );
 		$sport_id        = resolve_term_id( $atts['sport'], 'lf_sport' );
 		$league_level_id = resolve_term_id( $atts['league_level'], 'lf_league_level' );
 		$sport_slug      = $this->resolve_context_sport_slug( $sport_id, $competition_id, $season_id );
@@ -122,6 +122,7 @@ class Renderer {
 
 		$competition_id   = resolve_term_id( $atts['competition'], 'lf_competition' );
 		$season_id        = resolve_season_context( $atts['season'] );
+		$season_by_sport  = '' === (string) $atts['season'] || 'current' === strtolower( (string) $atts['season'] );
 		$league_level_id  = resolve_term_id( $atts['league_level'], 'lf_league_level' );
 		$show_logos       = '' === $atts['show_logos'] ? (bool) get_setting( 'show_logos', 1 ) : ! empty( $atts['show_logos'] );
 		$enabled_sports   = $this->sports_manager->get_enabled_sports();
@@ -135,14 +136,16 @@ class Renderer {
 		$sections = array();
 
 		foreach ( $enabled_sports as $sport_slug => $sport ) {
-			$sport_id = resolve_term_id( $sport_slug, 'lf_sport' );
+			$sport_id     = resolve_term_id( $sport_slug, 'lf_sport' );
+			// Without an explicit season each sport uses its own current season.
+			$sport_season = $season_by_sport ? resolve_season_context( $atts['season'], $sport_slug ) : $season_id;
 
 			foreach ( $league_levels as $league_level ) {
 				if ( ! $league_level || is_wp_error( $league_level ) ) {
 					continue;
 				}
 
-				$rows = $this->standings_service->get_rows( $competition_id, $season_id, $sport_id, (int) $league_level->term_id );
+				$rows = $this->standings_service->get_rows( $competition_id, $sport_season, $sport_id, (int) $league_level->term_id );
 
 				$sections[] = array(
 					'slug'         => $sport_slug,
@@ -191,7 +194,7 @@ class Renderer {
 		);
 
 		$competition_id  = resolve_term_id( $atts['competition'], 'lf_competition' );
-		$season_id       = resolve_season_context( $atts['season'] );
+		$season_id       = resolve_season_context( $atts['season'], $this->season_sport_context( $atts['sport'], $competition_id ) );
 		$sport_id        = resolve_term_id( $atts['sport'], 'lf_sport' );
 		$league_level_id = resolve_term_id( $atts['league_level'], 'lf_league_level' );
 		$show_logos      = '' === $atts['show_logos'] ? (bool) get_setting( 'show_logos', 1 ) : ! empty( $atts['show_logos'] );
@@ -278,7 +281,7 @@ class Renderer {
 		$matches = $this->get_match_items(
 			array(
 				'competition'      => $atts['competition'],
-				'season'           => resolve_season_context( $atts['season'] ),
+				'season'           => resolve_season_context( $atts['season'], $this->season_sport_context( $atts['sport'], $atts['competition'] ) ),
 				'sport'            => $atts['sport'],
 				'league_level'     => $atts['league_level'],
 				'status'           => $atts['status'],
@@ -386,7 +389,7 @@ class Renderer {
 				'show_day'         => '1',
 				'list_initial'     => 30,
 				'list_more'        => 15,
-				'limit'            => 20,
+				'limit'            => 100,
 			),
 			$atts,
 			'match_calendar'
@@ -410,19 +413,19 @@ class Renderer {
 			$initial_view = 'month';
 		}
 
-		$events = $this->get_calendar_items(
-			array(
+		$calendar_filters = array(
 				'competition'      => $atts['competition'],
-				'season'           => resolve_season_context( $atts['season'] ),
+				'season'           => resolve_season_context( $atts['season'], $this->season_sport_context( $atts['sport'], $atts['competition'] ) ),
 				'sport'            => $atts['sport'],
 				'league_level'     => $atts['league_level'],
 				'team'             => $atts['team'],
 				'include_knockout' => '' === $atts['include_knockout'] ? null : ! empty( $atts['include_knockout'] ),
 				'include_events'   => $include_events,
 				'event_type'       => $atts['event_type'],
-				'limit'            => (int) $atts['limit'],
-			)
-		);
+				'limit'            => public_collection_limit( $atts['limit'] ),
+			);
+		$calendar_page = $this->get_calendar_page( $calendar_filters );
+		$events = $calendar_page['items'];
 
 		$sport_data = $this->build_calendar_sport_data( $events );
 		$type_data  = $this->build_calendar_type_data( $events );
@@ -482,9 +485,16 @@ class Renderer {
 
 		$payload = array(
 			'events' => $events,
+			'pagination' => array(
+				'total' => $calendar_page['total'],
+				'nextPage' => $calendar_page['pages'] > 1 ? 2 : null,
+				'perPage' => $calendar_filters['limit'],
+			),
 			'sports' => $sports,
 			'types'  => $types,
 			'config' => array(
+				'calendarEndpoint' => rest_url( 'leagueflow/v1/calendar/events' ),
+				'calendarFilters' => array_diff_key( $calendar_filters, array( 'limit' => true ) ),
 				'startOfWeek'   => (int) get_option( 'start_of_week', 1 ),
 				'today'         => wp_date( 'Y-m-d' ),
 				'monthNames'    => $month_names,
@@ -520,6 +530,8 @@ class Renderer {
 				'vs'             => __( 'vs', 'leagueflow' ),
 				'prev'           => __( 'Previous', 'leagueflow' ),
 				'next'           => __( 'Next', 'leagueflow' ),
+				'batchProgress'  => __( '%1$d of %2$d scheduled events loaded.', 'leagueflow' ),
+				'batchError'     => __( 'Could not load the next schedule page. Please retry.', 'leagueflow' ),
 				'loadMore'       => __( 'Load more events', 'leagueflow' ),
 				'registration'   => __( 'Registration required', 'leagueflow' ),
 				'register'       => __( 'Register', 'leagueflow' ),
@@ -967,7 +979,7 @@ class Renderer {
 		);
 
 		$competition_id  = resolve_term_id( $atts['competition'], 'lf_competition' );
-		$season_id       = resolve_season_context( $atts['season'] );
+		$season_id       = resolve_season_context( $atts['season'], $this->season_sport_context( $atts['sport'], $competition_id ) );
 		$sport_id        = resolve_term_id( $atts['sport'], 'lf_sport' );
 		$league_level_id = resolve_term_id( $atts['league_level'], 'lf_league_level' );
 		$rounds          = $this->knockout_service->get_bracket( $competition_id, $season_id, $sport_id, $league_level_id );
@@ -1593,6 +1605,27 @@ class Renderer {
 			'competition'    => wp_get_post_terms( $match->ID, 'lf_competition', array( 'fields' => 'names' ) ),
 			'season'         => wp_get_post_terms( $match->ID, 'lf_season', array( 'fields' => 'names' ) ),
 		);
+	}
+
+	/**
+	 * Sport whose current season applies: the explicit sport attribute, else
+	 * the competition's sport, else none ('' keeps the legacy site-wide flag).
+	 *
+	 * @param mixed $sport Sport ID or slug.
+	 * @param mixed $competition Competition ID or slug.
+	 * @return string
+	 */
+	protected function season_sport_context( $sport, $competition ) {
+		$sport_id = resolve_term_id( $sport, 'lf_sport' );
+
+		if ( $sport_id ) {
+			$term = get_term( $sport_id, 'lf_sport' );
+			return $term instanceof \WP_Term ? $term->slug : '';
+		}
+
+		$competition_id = resolve_term_id( $competition, 'lf_competition' );
+
+		return $competition_id ? get_term_sport_slug( $competition_id ) : '';
 	}
 
 	/**

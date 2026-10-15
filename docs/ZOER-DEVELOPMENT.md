@@ -153,7 +153,10 @@ nonces and roles, captures the redirect notice, blocks outbound HTTP and capture
 mail. It covers roster add/remove, join requests and reviews, availability,
 own/other team and player edits, invalid nonces/IDs, duplicate submissions and
 upload type rejection (rejected files leave profile/team text unchanged), plus
-team creation and player onboarding permission/validation paths. It is not an HTTP test. Never run it against the
+team creation and player onboarding permission/validation paths. Join-request
+reviews carry the request state token: a stateless or stale form, a staff decision
+made first, and a decision stored while the captain waited for the request lock are
+all refused with no roster change, history entry or mail. It is not an HTTP test. Never run it against the
 Intramurals database.
 
 `tests/wordpress-portal-http.php` is the HTTP counterpart, with the same
@@ -164,17 +167,48 @@ requests with `Host: leagueflow.test`. It logs in through `wp-login.php` with co
 scrapes nonces from the rendered portal forms and posts to `wp-admin/admin-post.php`,
 including multipart uploads. It covers own saves and reloads, forged cross-team
 posts, missing/forged/other-user/wrong-action nonces, roster add/remove, duplicate
-submits, join request/review, availability, malformed and privileged invites, and
+submits, join request/review (the review form's rendered state token, the same form
+with the token removed, and a page loaded before the request changed), availability, malformed and privileged invites, and
 PNG upload success plus PHP/SVG/oversize rejection. A rejected photo or logo leaves the
 submitted text fields unchanged. It also posts the rendered team-creation and player
 onboarding forms with invalid levels, sports, names, team choices and files, then one
 valid multipart team creation. Waivers/terms are not exercised. It does not
 test a browser, JavaScript, a production web server or physical devices.
 
-Run `php tests/asset-versions.php` to verify that `frontend.css`, `calendar.js`
-and `portal.js` are versioned by plugin version plus a content hash, so a
+Run `php tests/asset-versions.php` to verify that every plugin asset
+(`frontend.css`, `admin.css`, `editor.css`, `calendar.js`, `portal.js`,
+`blocks.js`, `admin.js`) is versioned by plugin version plus a content hash, so a
 development update with an unchanged plugin version is fetched fresh after a
 reload even if an installer keeps the package's fixed 2020-01-01 file dates.
+
+`tests/wordpress-admin.php` covers the admin workflow foundations tracked in
+`docs/ADMIN-WORKFLOW.md`, with the same `LEAGUEFLOW_DISPOSABLE_WP=1` and
+`http://leagueflow.test` guard. It drives the real `wp_edit_posts_query()` list
+query (undated matches/events in default, Trash, date-sorted and Unscheduled
+views), sport-scoped status counts, match score validation, competition/season
+sport rules, accessible names and select options in rendered metaboxes, the
+guarded create-only demo data (edits to earlier demo objects survive a rerun; a
+record appearing after the preview stops the run), list counts that match what an
+Author can see, the shared LeagueFlow screens, enabled sport menus, sport context and legacy page
+aliases, and the Requests inbox (nonce/role/ID guards, flags, reviewed actions,
+history, unknown legacy statuses, per-request locking checked with a second
+database connection, stale forms, and reconciliation only from explicit roster
+entry points). Final-review cases (G2–G4, H1–H5 in `docs/ADMIN-WORKFLOW.md`)
+inject faults inside the test only: `GET_LOCK` turned into `SELECT NULL`, a change
+made just before the lock query, a second MariaDB connection holding a lock, one
+refused term-relationship INSERT and one refused match insert. They check that
+locks fail closed, HTTP decisions need the state token, authority and record state
+are re-checked after the lock, captain and staff share one locked review path, and
+mapping/generation report applied, failed and incomplete records truthfully. Later
+groups cover per-sport current seasons with the legacy
+flag fallback and explicit All/Current season filters (including Brackets), the
+Setup check and its previewed, single-use competition/season mapping, fixture
+generation by level with duplicate, stale and forged-scope protection, scoring
+overrides that inherit global settings (clearing them restores identical
+standings), scheduling prerequisites, knockout target choices and the scoped
+team-member lookup. Demo runs happen inside a database transaction that is
+rolled back. CI runs it after the portal HTTP suite on WordPress 6.5 and
+latest. Never run it against the Intramurals database.
 
 Run `php tests/admin-assets.php` to verify that the plugin stylesheet loads on
 Placements, Fixtures, Utilities and the other supported admin screens without

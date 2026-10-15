@@ -20,10 +20,10 @@ class Settings {
 	 * @var array<string, string>
 	 */
 	protected $tie_breakers = array(
-		'goal_difference' => 'Goal difference',
-		'goals_for'       => 'Goals for',
+		'goal_difference' => 'Score difference',
+		'goals_for'       => 'Most scored',
 		'wins'            => 'Wins',
-		'goals_against'   => 'Fewest goals against',
+		'goals_against'   => 'Fewest conceded',
 		'name'            => 'Team name',
 	);
 
@@ -100,28 +100,28 @@ class Settings {
 			)
 		);
 
-		add_settings_field( 'points_win', __( 'Points for a win', 'leagueflow' ), array( $this, 'render_number_field' ), 'leagueflow-settings', 'leagueflow_points', array( 'key' => 'points_win', 'min' => 0, 'class' => 'leagueflow-setting-row--points' ) );
-		add_settings_field( 'points_draw', __( 'Points for a draw', 'leagueflow' ), array( $this, 'render_number_field' ), 'leagueflow-settings', 'leagueflow_points', array( 'key' => 'points_draw', 'min' => 0, 'class' => 'leagueflow-setting-row--points' ) );
-		add_settings_field( 'points_loss', __( 'Points for a loss', 'leagueflow' ), array( $this, 'render_number_field' ), 'leagueflow-settings', 'leagueflow_points', array( 'key' => 'points_loss', 'min' => 0, 'class' => 'leagueflow-setting-row--points' ) );
-		add_settings_field( 'forfeit_score_winner', __( 'Forfeit walkover goals', 'leagueflow' ), array( $this, 'render_number_field' ), 'leagueflow-settings', 'leagueflow_points', array( 'key' => 'forfeit_score_winner', 'min' => 0, 'class' => 'leagueflow-setting-row--points', 'description' => __( 'Goals credited to the team that wins by forfeit (default 3-0).', 'leagueflow' ) ) );
+		add_settings_field( 'points_win', __( 'Points for a win', 'leagueflow' ), array( $this, 'render_number_field' ), 'leagueflow-settings', 'leagueflow_points', array( 'key' => 'points_win', 'label_for' => 'leagueflow_setting_points_win', 'min' => 0, 'class' => 'leagueflow-setting-row--points' ) );
+		add_settings_field( 'points_draw', __( 'Points for a draw (tie)', 'leagueflow' ), array( $this, 'render_number_field' ), 'leagueflow-settings', 'leagueflow_points', array( 'key' => 'points_draw', 'label_for' => 'leagueflow_setting_points_draw', 'min' => 0, 'class' => 'leagueflow-setting-row--points' ) );
+		add_settings_field( 'points_loss', __( 'Points for a loss', 'leagueflow' ), array( $this, 'render_number_field' ), 'leagueflow-settings', 'leagueflow_points', array( 'key' => 'points_loss', 'label_for' => 'leagueflow_setting_points_loss', 'min' => 0, 'class' => 'leagueflow-setting-row--points' ) );
+		add_settings_field( 'forfeit_score_winner', __( 'Forfeit walkover score', 'leagueflow' ), array( $this, 'render_number_field' ), 'leagueflow-settings', 'leagueflow_points', array( 'key' => 'forfeit_score_winner', 'label_for' => 'leagueflow_setting_forfeit_score_winner', 'min' => 0, 'class' => 'leagueflow-setting-row--points leagueflow-setting-row--wide', 'description' => __( 'Score credited to the team that wins by forfeit (default 3-0), in the sport\'s own unit (goals, points, runs or sets).', 'leagueflow' ) ) );
 		add_settings_field( 'tie_breakers', __( 'Tie-breaker priority', 'leagueflow' ), array( $this, 'render_tie_breakers_field' ), 'leagueflow-settings', 'leagueflow_points', array( 'class' => 'leagueflow-setting-row--wide' ) );
 
-		add_settings_field( 'min_rest_days', __( 'Preferred rest days', 'leagueflow' ), array( $this, 'render_number_field' ), 'leagueflow-settings', 'leagueflow_scheduling', array( 'key' => 'min_rest_days', 'min' => 0, 'description' => __( 'Auto-scheduling spaces a team\'s games at least this many days apart when slots allow. 0 disables spacing.', 'leagueflow' ) ) );
-		add_settings_field( 'min_days_between_rematch', __( 'Days between rematches', 'leagueflow' ), array( $this, 'render_number_field' ), 'leagueflow-settings', 'leagueflow_scheduling', array( 'key' => 'min_days_between_rematch', 'min' => 0, 'description' => __( 'The two legs of the same pairing are kept at least this many days apart. 0 disables the rule.', 'leagueflow' ) ) );
-		add_settings_field( 'max_games_per_day_per_team', __( 'Max games per team per day', 'leagueflow' ), array( $this, 'render_number_field' ), 'leagueflow-settings', 'leagueflow_scheduling', array( 'key' => 'max_games_per_day_per_team', 'min' => 0, 'description' => __( 'Hard cap on games a single team can be auto-scheduled into on one day. 0 means no cap.', 'leagueflow' ) ) );
+		add_settings_field( 'min_rest_days', __( 'Preferred rest days', 'leagueflow' ), array( $this, 'render_number_field' ), 'leagueflow-settings', 'leagueflow_scheduling', array( 'key' => 'min_rest_days', 'label_for' => 'leagueflow_setting_min_rest_days', 'min' => 0, 'description' => __( 'Auto-scheduling spaces a team\'s games at least this many days apart when slots allow. 0 disables spacing.', 'leagueflow' ) ) );
+		add_settings_field( 'min_days_between_rematch', __( 'Days between rematches', 'leagueflow' ), array( $this, 'render_number_field' ), 'leagueflow-settings', 'leagueflow_scheduling', array( 'key' => 'min_days_between_rematch', 'label_for' => 'leagueflow_setting_min_days_between_rematch', 'min' => 0, 'description' => __( 'The two legs of the same pairing are kept at least this many days apart. 0 disables the rule.', 'leagueflow' ) ) );
+		add_settings_field( 'max_games_per_day_per_team', __( 'Max games per team per day', 'leagueflow' ), array( $this, 'render_number_field' ), 'leagueflow-settings', 'leagueflow_scheduling', array( 'key' => 'max_games_per_day_per_team', 'label_for' => 'leagueflow_setting_max_games_per_day_per_team', 'min' => 0, 'description' => __( 'Hard cap on games a single team can be auto-scheduled into on one day. 0 means no cap.', 'leagueflow' ) ) );
 
-		add_settings_field( 'captain_registration_open', __( 'Captain registration', 'leagueflow' ), array( $this, 'render_checkbox_field' ), 'leagueflow-settings', 'leagueflow_registration', array( 'key' => 'captain_registration_open', 'label' => __( 'Captains can create teams during the team-building window', 'leagueflow' ), 'class' => 'leagueflow-setting-row--wide' ) );
-		add_settings_field( 'player_registration_open', __( 'Player registration', 'leagueflow' ), array( $this, 'render_checkbox_field' ), 'leagueflow-settings', 'leagueflow_registration', array( 'key' => 'player_registration_open', 'label' => __( 'Players can create profiles and request or ask for team placement', 'leagueflow' ), 'class' => 'leagueflow-setting-row--wide' ) );
-		add_settings_field( 'registration_email', __( 'Registration inbox', 'leagueflow' ), array( $this, 'render_text_field' ), 'leagueflow-settings', 'leagueflow_registration', array( 'key' => 'registration_email', 'type' => 'email', 'placeholder' => get_option( 'admin_email', '' ), 'description' => __( 'Receives player placement requests. The site administration email is used when this is blank.', 'leagueflow' ), 'class' => 'leagueflow-setting-row--wide' ) );
+		add_settings_field( 'captain_registration_open', __( 'Captain registration', 'leagueflow' ), array( $this, 'render_checkbox_field' ), 'leagueflow-settings', 'leagueflow_registration', array( 'key' => 'captain_registration_open', 'label_for' => 'leagueflow_setting_captain_registration_open', 'label' => __( 'Captains can create teams during the team-building window', 'leagueflow' ), 'class' => 'leagueflow-setting-row--wide' ) );
+		add_settings_field( 'player_registration_open', __( 'Player registration', 'leagueflow' ), array( $this, 'render_checkbox_field' ), 'leagueflow-settings', 'leagueflow_registration', array( 'key' => 'player_registration_open', 'label_for' => 'leagueflow_setting_player_registration_open', 'label' => __( 'Players can create profiles and request or ask for team placement', 'leagueflow' ), 'class' => 'leagueflow-setting-row--wide' ) );
+		add_settings_field( 'registration_email', __( 'Registration inbox', 'leagueflow' ), array( $this, 'render_text_field' ), 'leagueflow-settings', 'leagueflow_registration', array( 'key' => 'registration_email', 'label_for' => 'leagueflow_setting_registration_email', 'type' => 'email', 'placeholder' => get_option( 'admin_email', '' ), 'description' => __( 'Receives player placement requests. The site administration email is used when this is blank.', 'leagueflow' ), 'class' => 'leagueflow-setting-row--wide' ) );
 
-		add_settings_field( 'team_slug', __( 'Team slug', 'leagueflow' ), array( $this, 'render_text_field' ), 'leagueflow-settings', 'leagueflow_display', array( 'key' => 'team_slug' ) );
-		add_settings_field( 'match_slug', __( 'Match slug', 'leagueflow' ), array( $this, 'render_text_field' ), 'leagueflow-settings', 'leagueflow_display', array( 'key' => 'match_slug' ) );
-		add_settings_field( 'competition_slug', __( 'Competition slug', 'leagueflow' ), array( $this, 'render_text_field' ), 'leagueflow-settings', 'leagueflow_display', array( 'key' => 'competition_slug' ) );
-		add_settings_field( 'season_slug', __( 'Season slug', 'leagueflow' ), array( $this, 'render_text_field' ), 'leagueflow-settings', 'leagueflow_display', array( 'key' => 'season_slug' ) );
-		add_settings_field( 'date_time_format', __( 'Match date/time format', 'leagueflow' ), array( $this, 'render_text_field' ), 'leagueflow-settings', 'leagueflow_display', array( 'key' => 'date_time_format', 'placeholder' => 'F j, Y g:i a' ) );
-		add_settings_field( 'show_logos', __( 'Show team logos by default', 'leagueflow' ), array( $this, 'render_checkbox_field' ), 'leagueflow-settings', 'leagueflow_display', array( 'key' => 'show_logos', 'class' => 'leagueflow-setting-row--toggle' ) );
-		add_settings_field( 'show_player_photos', __( 'Show player photos by default', 'leagueflow' ), array( $this, 'render_checkbox_field' ), 'leagueflow-settings', 'leagueflow_display', array( 'key' => 'show_player_photos', 'class' => 'leagueflow-setting-row--toggle' ) );
-		add_settings_field( 'cleanup_on_uninstall', __( 'Delete data on uninstall', 'leagueflow' ), array( $this, 'render_checkbox_field' ), 'leagueflow-settings', 'leagueflow_display', array( 'key' => 'cleanup_on_uninstall', 'class' => 'leagueflow-setting-row--toggle' ) );
+		add_settings_field( 'team_slug', __( 'Team slug', 'leagueflow' ), array( $this, 'render_text_field' ), 'leagueflow-settings', 'leagueflow_display', array( 'key' => 'team_slug', 'label_for' => 'leagueflow_setting_team_slug' ) );
+		add_settings_field( 'match_slug', __( 'Match slug', 'leagueflow' ), array( $this, 'render_text_field' ), 'leagueflow-settings', 'leagueflow_display', array( 'key' => 'match_slug', 'label_for' => 'leagueflow_setting_match_slug' ) );
+		add_settings_field( 'competition_slug', __( 'Competition slug', 'leagueflow' ), array( $this, 'render_text_field' ), 'leagueflow-settings', 'leagueflow_display', array( 'key' => 'competition_slug', 'label_for' => 'leagueflow_setting_competition_slug' ) );
+		add_settings_field( 'season_slug', __( 'Season slug', 'leagueflow' ), array( $this, 'render_text_field' ), 'leagueflow-settings', 'leagueflow_display', array( 'key' => 'season_slug', 'label_for' => 'leagueflow_setting_season_slug' ) );
+		add_settings_field( 'date_time_format', __( 'Match date/time format', 'leagueflow' ), array( $this, 'render_text_field' ), 'leagueflow-settings', 'leagueflow_display', array( 'key' => 'date_time_format', 'label_for' => 'leagueflow_setting_date_time_format', 'placeholder' => 'F j, Y g:i a' ) );
+		add_settings_field( 'show_logos', __( 'Show team logos by default', 'leagueflow' ), array( $this, 'render_checkbox_field' ), 'leagueflow-settings', 'leagueflow_display', array( 'key' => 'show_logos', 'label_for' => 'leagueflow_setting_show_logos', 'label' => __( 'Show team logos in LeagueFlow blocks and shortcodes that do not set their own logo option', 'leagueflow' ), 'class' => 'leagueflow-setting-row--toggle' ) );
+		add_settings_field( 'show_player_photos', __( 'Show player photos by default', 'leagueflow' ), array( $this, 'render_checkbox_field' ), 'leagueflow-settings', 'leagueflow_display', array( 'key' => 'show_player_photos', 'label_for' => 'leagueflow_setting_show_player_photos', 'label' => __( 'Show player photos in rosters that do not set their own photo option', 'leagueflow' ), 'class' => 'leagueflow-setting-row--toggle' ) );
+		add_settings_field( 'cleanup_on_uninstall', __( 'Delete data on uninstall', 'leagueflow' ), array( $this, 'render_checkbox_field' ), 'leagueflow-settings', 'leagueflow_display', array( 'key' => 'cleanup_on_uninstall', 'label_for' => 'leagueflow_setting_cleanup_on_uninstall', 'label' => __( 'When the plugin is deleted, permanently delete its teams, players, matches, competitions, seasons, league levels, venue availability and settings', 'leagueflow' ), 'class' => 'leagueflow-setting-row--toggle' ) );
 	}
 
 	/**
@@ -211,7 +211,7 @@ class Settings {
 	 * @return void
 	 */
 	public function render_points_section() {
-		echo '<p>' . esc_html__( 'Choose how LeagueFlow calculates standings and resolves ties between teams on equal points.', 'leagueflow' ) . '</p>';
+		echo '<p>' . esc_html__( 'Default scoring for every sport: table points per result and how ties on points are broken. A sport or competition can use different values (see "Scoring by sport and competition"); until then it uses these.', 'leagueflow' ) . '</p>';
 	}
 
 	/**
@@ -253,7 +253,7 @@ class Settings {
 		$minimum = isset( $args['min'] ) ? (int) $args['min'] : 0;
 
 		printf(
-			'<input type="number" class="small-text" min="%1$d" name="leagueflow_settings[%2$s]" value="%3$s" />',
+			'<input type="number" class="small-text" min="%1$d" id="leagueflow_setting_%2$s" name="leagueflow_settings[%2$s]" value="%3$s" />',
 			(int) $minimum,
 			esc_attr( $key ),
 			esc_attr( (string) $value )
@@ -277,7 +277,7 @@ class Settings {
 		$type        = isset( $args['type'] ) && in_array( $args['type'], array( 'text', 'email', 'url' ), true ) ? $args['type'] : 'text';
 
 		printf(
-			'<input type="%4$s" class="regular-text" name="leagueflow_settings[%1$s]" value="%2$s" placeholder="%3$s" />',
+			'<input type="%4$s" class="regular-text" id="leagueflow_setting_%1$s" name="leagueflow_settings[%1$s]" value="%2$s" placeholder="%3$s" />',
 			esc_attr( $key ),
 			esc_attr( (string) $value ),
 			esc_attr( (string) $placeholder ),
@@ -298,14 +298,24 @@ class Settings {
 	public function render_checkbox_field( $args ) {
 		$key   = $args['key'];
 		$value = bool_to_int( get_setting( $key, 0 ) );
-		$label = isset( $args['label'] ) ? (string) $args['label'] : __( 'Enabled', 'leagueflow' );
+		// Every checkbox names its purpose; the row title is a <label for> via label_for.
+		$label = isset( $args['label'] ) ? (string) $args['label'] : '';
 
 		printf(
-			'<label><input type="checkbox" name="leagueflow_settings[%1$s]" value="1" %2$s /> %3$s</label>',
+			'<label><input type="checkbox" id="leagueflow_setting_%1$s" name="leagueflow_settings[%1$s]" value="1" %2$s /> %3$s</label>',
 			esc_attr( $key ),
 			checked( $value, 1, false ),
 			esc_html( $label )
 		);
+	}
+
+	/**
+	 * Tie-breaker keys and sport-neutral labels.
+	 *
+	 * @return array<string, string>
+	 */
+	public function get_tie_breaker_labels() {
+		return $this->tie_breakers;
 	}
 
 	/**

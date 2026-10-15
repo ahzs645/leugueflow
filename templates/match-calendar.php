@@ -32,8 +32,8 @@ defined( 'ABSPATH' ) || exit;
 	</div>
 
 	<div class="leagueflow-calendar__filters">
-		<?php if ( $show_chips && count( $sports ) > 1 ) : ?>
-			<div class="leagueflow-calendar__chips" role="group" aria-label="<?php esc_attr_e( 'Filter schedule by sport', 'leagueflow' ); ?>">
+		<?php if ( $show_chips ) : ?>
+			<div class="leagueflow-calendar__chips" role="group" data-calendar-sport-filters <?php echo count( $sports ) <= 1 ? 'hidden' : ''; ?> aria-label="<?php esc_attr_e( 'Filter schedule by sport', 'leagueflow' ); ?>">
 				<button type="button" class="leagueflow-calendar__chip is-active" data-sport="" aria-pressed="true">
 					<?php esc_html_e( 'All sports', 'leagueflow' ); ?>
 				</button>
@@ -47,8 +47,7 @@ defined( 'ABSPATH' ) || exit;
 			</div>
 		<?php endif; ?>
 
-		<?php if ( $show_types ) : ?>
-			<div class="leagueflow-calendar__chips leagueflow-calendar__chips--types" role="group" aria-label="<?php esc_attr_e( 'Filter schedule by type', 'leagueflow' ); ?>">
+			<div class="leagueflow-calendar__chips leagueflow-calendar__chips--types" role="group" data-calendar-type-filters <?php echo count( $types ) <= 1 ? 'hidden' : ''; ?> aria-label="<?php esc_attr_e( 'Filter schedule by type', 'leagueflow' ); ?>">
 				<button type="button" class="leagueflow-calendar__chip is-active" data-type="" aria-pressed="true">
 					<?php esc_html_e( 'All types', 'leagueflow' ); ?>
 				</button>
@@ -59,7 +58,6 @@ defined( 'ABSPATH' ) || exit;
 					</button>
 				<?php endforeach; ?>
 			</div>
-		<?php endif; ?>
 	</div>
 
 	<div class="leagueflow-calendar__layout">
@@ -83,6 +81,11 @@ defined( 'ABSPATH' ) || exit;
 		</aside>
 	</div>
 
+	<div class="leagueflow-calendar__pagination" data-calendar-pagination <?php echo empty( $payload['pagination']['nextPage'] ) ? 'hidden' : ''; ?>>
+		<p data-calendar-progress role="status"></p>
+		<button type="button" class="leagueflow-calendar__load-more" data-calendar-load-page><?php esc_html_e( 'Load next schedule page', 'leagueflow' ); ?></button>
+	</div>
+
 	<div class="leagueflow-calendar__dialog" data-calendar-dialog hidden>
 		<div class="leagueflow-calendar__dialog-backdrop" data-calendar-dialog-close></div>
 		<article class="leagueflow-calendar__dialog-card" role="dialog" aria-modal="true" aria-labelledby="leagueflow-calendar-dialog-title">
@@ -93,7 +96,7 @@ defined( 'ABSPATH' ) || exit;
 
 	<noscript>
 		<div class="leagueflow-calendar__fallback">
-			<p><?php esc_html_e( 'The interactive calendar needs JavaScript. Here is the full schedule:', 'leagueflow' ); ?></p>
+			<p><?php esc_html_e( 'The interactive calendar needs JavaScript. Here is the first schedule page (up to 100 events):', 'leagueflow' ); ?></p>
 			<div class="leagueflow-match-stack">
 				<?php foreach ( $items as $item ) : ?>
 					<article class="leagueflow-match-row">

@@ -590,6 +590,47 @@ function set_player_team_ids( $player_id, $team_ids ) {
 }
 
 /**
+ * Report memberships an authorized person just added, so matching pending
+ * join requests can be closed.
+ *
+ * Call this only from explicit, user-driven roster entry points (admin player
+ * save, portal roster add, portal or inbox request review). The generic
+ * membership setters never call it, so migrations, imports, demo data and
+ * rollbacks never change requests.
+ *
+ * @param int        $player_id Player post ID.
+ * @param array<int> $before_team_ids Team IDs before the change.
+ * @param string     $source Entry point key (kept in request history).
+ * @param int        $exclude_request_id Request already closed by this change.
+ * @return array<int, int> Added team IDs.
+ */
+function reconcile_roster_additions( $player_id, $before_team_ids, $source, $exclude_request_id = 0 ) {
+	$player_id = absint( $player_id );
+	$added     = array_values( array_diff( get_player_team_ids( $player_id ), array_map( 'absint', (array) $before_team_ids ) ) );
+
+	if ( $player_id && $added ) {
+		/**
+		 * Fires after an authorized person added roster memberships.
+		 *
+		 * @param int                  $player_id Player post ID.
+		 * @param array<int>           $added Newly added team IDs.
+		 * @param array<string, mixed> $context source and exclude_request_id.
+		 */
+		do_action(
+			'leagueflow_roster_memberships_added',
+			$player_id,
+			$added,
+			array(
+				'source'             => sanitize_key( $source ),
+				'exclude_request_id' => absint( $exclude_request_id ),
+			)
+		);
+	}
+
+	return $added;
+}
+
+/**
  * Add a team membership to a player.
  *
  * @param int $player_id Player post ID.
@@ -636,29 +677,83 @@ function player_has_team( $player_id, $team_id ) {
 }
 
 /**
+ * IDs of players whose memberships include a team.
+ *
+ * A database pre-filter on the stored membership meta (primary team, or the
+ * serialized team list as integer or string values) narrows the candidates;
+ * player_has_team() then confirms each one, so a loose pre-filter match never
+ * adds a player and no member is missed.
+ *
+ * @param int                $team_id Team ID.
+ * @param string|array<int, string> $statuses Post statuses to include.
+ * @return array<int, int>
+ */
+function get_team_member_player_ids( $team_id, $statuses = 'any' ) {
+	$team_id = absint( $team_id );
+
+	if ( ! $team_id ) {
+		return array();
+	}
+
+	$candidates = get_posts(
+		array(
+			'post_type'              => 'lf_player',
+			'post_status'            => $statuses,
+			'posts_per_page'         => -1,
+			'fields'                 => 'ids',
+			'no_found_rows'          => true,
+			'update_post_term_cache' => false,
+			'meta_query'             => array(
+				'relation' => 'OR',
+				array(
+					'key'   => 'lf_team_id',
+					'value' => $team_id,
+				),
+				array(
+					'key'     => 'lf_team_ids',
+					'value'   => ';i:' . $team_id . ';',
+					'compare' => 'LIKE',
+				),
+				array(
+					'key'     => 'lf_team_ids',
+					'value'   => '"' . $team_id . '";',
+					'compare' => 'LIKE',
+				),
+			),
+		)
+	);
+
+	return array_values(
+		array_filter(
+			array_map( 'absint', $candidates ),
+			static function ( $player_id ) use ( $team_id ) {
+				return player_has_team( $player_id, $team_id );
+			}
+		)
+	);
+}
+
+/**
  * Get every player on a team, including players without a jersey number.
  *
  * @param int $team_id Team post ID.
  * @return array<int, \WP_Post>
  */
 function get_team_roster_player_posts( $team_id ) {
-	$team_id = absint( $team_id );
-	$players = array_values(
-		array_filter(
-			get_posts(
-				array(
-					'post_type'      => 'lf_player',
-					'post_status'    => array( 'publish', 'draft', 'pending', 'future', 'private' ),
-					'posts_per_page' => -1,
-					'orderby'        => 'title',
-					'order'          => 'ASC',
-				)
-			),
-			static function( $player ) use ( $team_id ) {
-				return $player instanceof \WP_Post && player_has_team( $player->ID, $team_id );
-			}
+	$team_id    = absint( $team_id );
+	$player_ids = get_team_member_player_ids( $team_id, array( 'publish', 'draft', 'pending', 'future', 'private' ) );
+	$players    = $player_ids
+		? get_posts(
+			array(
+				'post_type'      => 'lf_player',
+				'post_status'    => array( 'publish', 'draft', 'pending', 'future', 'private' ),
+				'post__in'       => $player_ids,
+				'posts_per_page' => -1,
+				'orderby'        => 'title',
+				'order'          => 'ASC',
+			)
 		)
-	);
+		: array();
 
 	usort(
 		$players,
@@ -1043,23 +1138,225 @@ function resolve_post_id( $value, $post_type ) {
 }
 
 /**
- * Get the ID of the season flagged as current, if any.
- *
- * @return int Season term ID, or 0 when no season is flagged current.
+ * Option storing optional scoring overrides per sport and per competition.
  */
-function get_current_season_id() {
-	static $cache = null;
+const RULE_OVERRIDES_OPTION = 'leagueflow_rule_overrides';
 
-	if ( null !== $cache ) {
-		return $cache;
+/**
+ * Scoring rules that a sport or competition may override.
+ *
+ * @return array<int, string>
+ */
+function rule_keys() {
+	return array( 'points_win', 'points_draw', 'points_loss', 'tie_breakers' );
+}
+
+/**
+ * Allowed tie-breaker keys.
+ *
+ * @return array<int, string>
+ */
+function tie_breaker_keys() {
+	return array( 'goal_difference', 'goals_for', 'wins', 'goals_against', 'name' );
+}
+
+/**
+ * Clean one override: keep only known keys with valid values.
+ *
+ * @param mixed $values Raw values.
+ * @return array<string, mixed>
+ */
+function sanitize_rule_override( $values ) {
+	$clean = array();
+
+	if ( ! is_array( $values ) ) {
+		return $clean;
 	}
 
+	foreach ( array( 'points_win', 'points_draw', 'points_loss' ) as $key ) {
+		if ( isset( $values[ $key ] ) && '' !== $values[ $key ] && is_numeric( $values[ $key ] ) ) {
+			$clean[ $key ] = max( 0, (int) $values[ $key ] );
+		}
+	}
+
+	if ( isset( $values['tie_breakers'] ) && is_array( $values['tie_breakers'] ) ) {
+		$order = array();
+
+		foreach ( $values['tie_breakers'] as $value ) {
+			$value = sanitize_key( (string) $value );
+
+			if ( in_array( $value, tie_breaker_keys(), true ) && ! in_array( $value, $order, true ) ) {
+				$order[] = $value;
+			}
+		}
+
+		if ( $order ) {
+			$clean['tie_breakers'] = array_slice( $order, 0, 4 );
+		}
+	}
+
+	return $clean;
+}
+
+/**
+ * Stored overrides: array( 'sport' => slug => values, 'competition' => id => values ).
+ *
+ * @return array<string, array<string|int, array<string, mixed>>>
+ */
+function get_rule_overrides() {
+	$stored = get_option( RULE_OVERRIDES_OPTION, array() );
+	$clean  = array( 'sport' => array(), 'competition' => array() );
+
+	if ( ! is_array( $stored ) ) {
+		return $clean;
+	}
+
+	foreach ( (array) ( $stored['sport'] ?? array() ) as $slug => $values ) {
+		$values = sanitize_rule_override( $values );
+
+		if ( $values && '' !== sanitize_key( (string) $slug ) ) {
+			$clean['sport'][ sanitize_key( (string) $slug ) ] = $values;
+		}
+	}
+
+	foreach ( (array) ( $stored['competition'] ?? array() ) as $term_id => $values ) {
+		$values = sanitize_rule_override( $values );
+
+		if ( $values && absint( $term_id ) ) {
+			$clean['competition'][ absint( $term_id ) ] = $values;
+		}
+	}
+
+	return $clean;
+}
+
+/**
+ * Save or remove one override. An empty value list removes it, so the scope
+ * inherits again.
+ *
+ * @param string $scope sport or competition.
+ * @param mixed  $key Sport slug or competition term ID.
+ * @param mixed  $values Values (empty = inherit).
+ * @return void
+ */
+function set_rule_override( $scope, $key, $values ) {
+	$overrides = get_rule_overrides();
+	$key       = 'competition' === $scope ? absint( $key ) : sanitize_key( (string) $key );
+	$values    = sanitize_rule_override( $values );
+
+	if ( ! in_array( $scope, array( 'sport', 'competition' ), true ) || ! $key ) {
+		return;
+	}
+
+	if ( $values ) {
+		$overrides[ $scope ][ $key ] = $values;
+	} else {
+		unset( $overrides[ $scope ][ $key ] );
+	}
+
+	if ( ! $overrides['sport'] && ! $overrides['competition'] ) {
+		delete_option( RULE_OVERRIDES_OPTION );
+		return;
+	}
+
+	update_option( RULE_OVERRIDES_OPTION, $overrides, false );
+}
+
+/**
+ * Effective scoring rules for a sport and competition.
+ *
+ * Global settings apply until a sport override sets a value; a competition
+ * override (only for a competition of that sport) then wins for the values it
+ * sets. With no overrides the result is exactly the global settings.
+ *
+ * @param string $sport_slug Sport ('' = none).
+ * @param int    $competition_id Competition (0 = none).
+ * @return array{values: array<string, mixed>, source: array<string, string>}
+ */
+function get_effective_rules( $sport_slug = '', $competition_id = 0 ) {
+	$sport_slug     = sanitize_key( (string) $sport_slug );
+	$competition_id = absint( $competition_id );
+	$values         = array(
+		'points_win'   => (int) get_setting( 'points_win', 3 ),
+		'points_draw'  => (int) get_setting( 'points_draw', 1 ),
+		'points_loss'  => (int) get_setting( 'points_loss', 0 ),
+		'tie_breakers' => (array) get_setting( 'tie_breakers', defaults()['tie_breakers'] ),
+	);
+	$source         = array_fill_keys( array_keys( $values ), 'global' );
+	$overrides      = get_rule_overrides();
+
+	if ( $competition_id && '' === $sport_slug ) {
+		$sport_slug = get_term_sport_slug( $competition_id );
+	}
+
+	foreach ( $sport_slug ? (array) ( $overrides['sport'][ $sport_slug ] ?? array() ) : array() as $key => $value ) {
+		$values[ $key ] = $value;
+		$source[ $key ] = 'sport';
+	}
+
+	if ( $competition_id && ( '' === get_term_sport_slug( $competition_id ) || get_term_sport_slug( $competition_id ) === $sport_slug ) ) {
+		foreach ( (array) ( $overrides['competition'][ $competition_id ] ?? array() ) as $key => $value ) {
+			$values[ $key ] = $value;
+			$source[ $key ] = 'competition';
+		}
+	}
+
+	return array(
+		'values' => $values,
+		'source' => $source,
+	);
+}
+
+/**
+ * Option storing one current season per sport (sport slug => season term ID).
+ */
+const CURRENT_SEASONS_OPTION = 'leagueflow_current_seasons';
+
+/**
+ * Sport slug stored on a season or competition term ('' when none).
+ *
+ * @param int $term_id Term ID.
+ * @return string
+ */
+function get_term_sport_slug( $term_id ) {
+	return sanitize_key( (string) get_term_meta( absint( $term_id ), 'lf_sport_slug', true ) );
+}
+
+/**
+ * Per-sport current seasons, keeping only entries whose season still exists
+ * and still belongs to that sport.
+ *
+ * @return array<string, int>
+ */
+function get_current_season_map() {
+	$stored = get_option( CURRENT_SEASONS_OPTION, array() );
+	$map    = array();
+
+	foreach ( is_array( $stored ) ? $stored : array() as $sport_slug => $term_id ) {
+		$sport_slug = sanitize_key( (string) $sport_slug );
+		$term       = get_term( absint( $term_id ), 'lf_season' );
+
+		if ( '' !== $sport_slug && $term instanceof \WP_Term && get_term_sport_slug( $term->term_id ) === $sport_slug ) {
+			$map[ $sport_slug ] = (int) $term->term_id;
+		}
+	}
+
+	return $map;
+}
+
+/**
+ * Seasons carrying the legacy site-wide "current" flag (normally zero or one).
+ *
+ * @return array<int, int>
+ */
+function get_legacy_current_season_ids() {
 	$terms = get_terms(
 		array(
 			'taxonomy'   => 'lf_season',
 			'hide_empty' => false,
-			'number'     => 1,
 			'fields'     => 'ids',
+			'orderby'    => 'term_id',
+			'order'      => 'ASC',
 			'meta_query' => array(
 				array(
 					'key'   => 'lf_is_current',
@@ -1069,68 +1366,203 @@ function get_current_season_id() {
 		)
 	);
 
-	$cache = ( ! is_wp_error( $terms ) && ! empty( $terms ) ) ? (int) $terms[0] : 0;
-
-	return $cache;
+	return is_wp_error( $terms ) ? array() : array_map( 'intval', $terms );
 }
 
 /**
- * Flag one season as the current one, clearing the flag from all others.
+ * Forget cached current-season lookups (after any change).
  *
- * @param int $term_id Season term ID to make current, or 0 to clear all.
  * @return void
+ */
+function flush_current_season_cache() {
+	$GLOBALS['leagueflow_current_season_cache'] = array();
+}
+
+/**
+ * Get the current season, optionally for one sport.
+ *
+ * - With a sport that has its own current season, that season.
+ * - Otherwise the legacy site-wide flagged season, exactly as before, as long
+ *   as no sport has its own current season yet, or the flagged season has no
+ *   sport or belongs to the requested sport. Once per-sport seasons are in
+ *   use, one sport's legacy flag no longer leaks into another sport.
+ * - Otherwise 0 (all seasons).
+ *
+ * @param string $sport_slug Sport slug ('' = no sport context).
+ * @return int Season term ID, or 0 when none applies.
+ */
+function get_current_season_id( $sport_slug = '' ) {
+	$sport_slug = sanitize_key( (string) $sport_slug );
+	$cache      = isset( $GLOBALS['leagueflow_current_season_cache'] ) && is_array( $GLOBALS['leagueflow_current_season_cache'] ) ? $GLOBALS['leagueflow_current_season_cache'] : array();
+
+	if ( isset( $cache[ $sport_slug ] ) ) {
+		return $cache[ $sport_slug ];
+	}
+
+	$map    = get_current_season_map();
+	$result = 0;
+
+	if ( '' !== $sport_slug && isset( $map[ $sport_slug ] ) ) {
+		$result = $map[ $sport_slug ];
+	} else {
+		$legacy = get_legacy_current_season_ids();
+		$legacy = $legacy ? $legacy[0] : 0;
+
+		if ( $legacy ) {
+			$legacy_sport = get_term_sport_slug( $legacy );
+			$result       = ( '' === $sport_slug || ! $map || '' === $legacy_sport || $legacy_sport === $sport_slug ) ? $legacy : 0;
+		}
+	}
+
+	$cache[ $sport_slug ]                       = (int) $result;
+	$GLOBALS['leagueflow_current_season_cache'] = $cache;
+
+	return (int) $result;
+}
+
+/**
+ * Make a season current.
+ *
+ * A season that belongs to a sport becomes that sport's current season only;
+ * other sports keep theirs. A legacy site-wide flag on a season of the same
+ * sport is cleared because the sport's own value now supersedes it. A season
+ * without a sport keeps the legacy behaviour (one site-wide flagged season).
+ * Passing 0 clears every current season (legacy behaviour).
+ *
+ * @param int $term_id Season term ID, or 0 to clear all.
+ * @return bool Whether a season was made current.
  */
 function set_current_season( $term_id ) {
 	$term_id = absint( $term_id );
 
-	$flagged = get_terms(
-		array(
-			'taxonomy'   => 'lf_season',
-			'hide_empty' => false,
-			'fields'     => 'ids',
-			'meta_query' => array(
-				array(
-					'key'   => 'lf_is_current',
-					'value' => '1',
-				),
-			),
-		)
-	);
+	if ( ! $term_id ) {
+		foreach ( get_legacy_current_season_ids() as $existing_id ) {
+			delete_term_meta( $existing_id, 'lf_is_current' );
+		}
 
-	if ( ! is_wp_error( $flagged ) ) {
-		foreach ( $flagged as $existing_id ) {
-			if ( (int) $existing_id !== $term_id ) {
-				delete_term_meta( (int) $existing_id, 'lf_is_current' );
+		delete_option( CURRENT_SEASONS_OPTION );
+		flush_current_season_cache();
+		return false;
+	}
+
+	$term = get_term( $term_id, 'lf_season' );
+
+	if ( ! $term instanceof \WP_Term ) {
+		return false;
+	}
+
+	$sport_slug = get_term_sport_slug( $term_id );
+
+	if ( '' !== $sport_slug ) {
+		$map                = get_current_season_map();
+		$map[ $sport_slug ] = $term_id;
+		update_option( CURRENT_SEASONS_OPTION, $map, false );
+
+		foreach ( get_legacy_current_season_ids() as $existing_id ) {
+			if ( $existing_id === $term_id || get_term_sport_slug( $existing_id ) === $sport_slug ) {
+				delete_term_meta( $existing_id, 'lf_is_current' );
 			}
 		}
-	}
+	} else {
+		foreach ( get_legacy_current_season_ids() as $existing_id ) {
+			if ( $existing_id !== $term_id && '' === get_term_sport_slug( $existing_id ) ) {
+				delete_term_meta( $existing_id, 'lf_is_current' );
+			}
+		}
 
-	if ( $term_id ) {
 		update_term_meta( $term_id, 'lf_is_current', 1 );
 	}
+
+	flush_current_season_cache();
+
+	return true;
+}
+
+/**
+ * Stop a season being current (for its sport and as the legacy flag).
+ *
+ * @param int $term_id Season term ID.
+ * @return void
+ */
+function clear_current_season( $term_id ) {
+	$term_id = absint( $term_id );
+	$stored  = get_option( CURRENT_SEASONS_OPTION, array() );
+	$stored  = is_array( $stored ) ? $stored : array();
+	$kept    = array_filter(
+		$stored,
+		static function ( $value ) use ( $term_id ) {
+			return absint( $value ) !== $term_id;
+		}
+	);
+
+	if ( count( $kept ) !== count( $stored ) ) {
+		update_option( CURRENT_SEASONS_OPTION, $kept, false );
+	}
+
+	delete_term_meta( $term_id, 'lf_is_current' );
+	flush_current_season_cache();
+}
+
+/**
+ * Whether a season is current for its own sport (or via the legacy flag).
+ *
+ * @param int $term_id Season term ID.
+ * @return bool
+ */
+function is_current_season( $term_id ) {
+	$term_id    = absint( $term_id );
+	$sport_slug = get_term_sport_slug( $term_id );
+
+	return $term_id && $term_id === get_current_season_id( $sport_slug );
 }
 
 /**
  * Resolve a season reference, falling back to the current season.
  *
- * An explicit ID or slug is honored. The literal "current" resolves to the
- * flagged season. An empty value falls back to the current season when one is
- * flagged, and otherwise to 0 (all seasons) so behavior is unchanged for sites
- * that never designate a current season.
+ * - "all" always means every season (0), so an explicit All choice is never
+ *   turned into the current season.
+ * - "current" means the current season (for the sport when one is given).
+ * - An empty value keeps the long-standing block/shortcode default: the
+ *   current season when one applies, otherwise all seasons. Sites that never
+ *   designate a current season see no change.
+ * - An ID or slug is honoured.
  *
- * @param mixed $value Season reference (ID, slug, "current", or empty).
+ * @param mixed  $value Season reference (ID, slug, "current", "all", or empty).
+ * @param string $sport_slug Sport context for the current season.
  * @return int Season term ID, or 0.
  */
-function resolve_season_context( $value ) {
-	if ( is_string( $value ) && 'current' === strtolower( trim( $value ) ) ) {
-		return get_current_season_id();
+function resolve_season_context( $value, $sport_slug = '' ) {
+	$keyword = is_string( $value ) ? strtolower( trim( $value ) ) : '';
+
+	if ( 'all' === $keyword ) {
+		return 0;
 	}
 
-	if ( '' === $value || null === $value || 0 === $value || '0' === $value ) {
-		return get_current_season_id();
+	if ( 'current' === $keyword || '' === $value || null === $value || 0 === $value || '0' === $value ) {
+		return get_current_season_id( $sport_slug );
 	}
 
 	return resolve_term_id( $value, 'lf_season' );
+}
+
+/**
+ * Read an admin season choice: "" or "all" = every season, "current" = the
+ * sport's current season, otherwise one season ID/slug.
+ *
+ * @param mixed  $raw Raw request value.
+ * @param string $sport_slug Sport context.
+ * @return array{mode: string, id: int} mode all|current|selected and the season ID used (0 = all).
+ */
+function resolve_admin_season_choice( $raw, $sport_slug = '' ) {
+	$raw = is_string( $raw ) ? sanitize_text_field( $raw ) : $raw;
+
+	if ( 'current' === $raw ) {
+		return array( 'mode' => 'current', 'id' => get_current_season_id( $sport_slug ) );
+	}
+
+	$id = ( '' === $raw || 'all' === $raw || null === $raw ) ? 0 : resolve_term_id( $raw, 'lf_season' );
+
+	return array( 'mode' => $id ? 'selected' : 'all', 'id' => $id );
 }
 
 /**
@@ -1449,4 +1881,66 @@ function can_view_league_post( $post ) {
 /** Team profile destination; themes can disable links when profiles are unavailable. */
 function team_profile_url( $team_id ) {
 	return (string) apply_filters( 'leagueflow_team_profile_url', get_permalink( $team_id ), $team_id );
+}
+
+/**
+ * Name for a site-scoped database lock (MySQL/MariaDB limit: 64 characters).
+ *
+ * @param string $scope Short scope, such as "req", "fix" or "map".
+ * @param string $key Key inside the scope.
+ * @return string
+ */
+function db_lock_name( $scope, $key ) {
+	global $wpdb;
+
+	return substr( 'lf_' . sanitize_key( $scope ) . '_' . md5( $wpdb->prefix . ( defined( 'DB_NAME' ) ? DB_NAME : '' ) . '|' . $key ), 0, 64 );
+}
+
+/**
+ * Take a named database lock. Fails closed: only an explicit "1" from
+ * GET_LOCK counts as success. A timeout ("0"), an error or an unavailable
+ * lock service (NULL) all return false, so callers change nothing.
+ *
+ * @param string $name Lock name from db_lock_name().
+ * @param int    $timeout Seconds to wait.
+ * @return bool
+ */
+function acquire_db_lock( $name, $timeout ) {
+	global $wpdb;
+
+	$result = $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK(%s, %d)', $name, max( 0, (int) $timeout ) ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+
+	return null !== $result && '1' === (string) $result;
+}
+
+/**
+ * Release a named database lock taken by acquire_db_lock().
+ *
+ * @param string $name Lock name.
+ * @return void
+ */
+function release_db_lock( $name ) {
+	global $wpdb;
+
+	$wpdb->query( $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $name ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+}
+
+/**
+ * Whether a post really holds a term, read back from the database.
+ *
+ * wp_set_object_terms() does not check its relationship INSERT, so a refused
+ * write can still return term IDs. Callers that must report what was saved
+ * verify with this instead of trusting that return value.
+ *
+ * @param int    $object_id Post ID.
+ * @param int    $term_id Term ID.
+ * @param string $taxonomy Taxonomy.
+ * @return bool
+ */
+function object_term_saved( $object_id, $term_id, $taxonomy ) {
+	$object_id = absint( $object_id );
+	clean_object_term_cache( $object_id, (string) get_post_type( $object_id ) );
+	$ids = wp_get_object_terms( $object_id, $taxonomy, array( 'fields' => 'ids', 'update_term_meta_cache' => false ) );
+
+	return ! is_wp_error( $ids ) && in_array( (int) $term_id, array_map( 'intval', (array) $ids ), true );
 }

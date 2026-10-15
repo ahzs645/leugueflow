@@ -104,7 +104,7 @@ jobs:
           extensions: mysqli, zip, curl, gd
           coverage: none
           tools: wp-cli
-      - name: Install disposable WordPress and exercise security, portal writes, portal HTTP and updates
+      - name: Install disposable WordPress and exercise security, portal writes, portal HTTP, admin workflow and updates
         env:
           WP_TEST_VERSION: ${{ matrix.wordpress }}
           LEAGUEFLOW_DISPOSABLE_WP: '1'
@@ -120,6 +120,7 @@ jobs:
           wp eval-file "$GITHUB_WORKSPACE/tests/wordpress-security.php" --path="$wp_root"
           wp eval-file "$GITHUB_WORKSPACE/tests/wordpress-portal.php" --path="$wp_root"
           wp eval-file "$GITHUB_WORKSPACE/tests/wordpress-portal-http.php" --path="$wp_root"
+          wp eval-file "$GITHUB_WORKSPACE/tests/wordpress-admin.php" --path="$wp_root"
           wp eval-file "$GITHUB_WORKSPACE/tests/wordpress-update.php" --path="$wp_root"
 
   publish:

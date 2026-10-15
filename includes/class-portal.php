@@ -1439,6 +1439,8 @@ class Portal {
 				$is_placement_request = ! $request_team_id;
 				$note                 = (string) get_post_meta( $request->ID, 'lf_request_note', true );
 				$email                = $player_id ? (string) get_post_meta( $player_id, 'lf_email', true ) : '';
+				$request_info         = Join_Request_Service::shared()->inspect( $request->ID );
+				$request_state        = $request_info ? Join_Request_Service::shared()->state_token( $request_info ) : '';
 				?>
 				<article class="leagueflow-portal-request">
 					<div>
@@ -1452,6 +1454,7 @@ class Portal {
 							<?php echo $this->render_hidden_fields( 'review_join_request' ); ?>
 							<input type="hidden" name="lf_join_request_id" value="<?php echo esc_attr( (string) $request->ID ); ?>" />
 							<input type="hidden" name="lf_team_id" value="<?php echo esc_attr( (string) $team_id ); ?>" />
+							<input type="hidden" name="lf_request_state" value="<?php echo esc_attr( $request_state ); ?>" />
 							<input type="hidden" name="lf_join_decision" value="approve" />
 							<button type="submit"><?php echo esc_html( $is_placement_request ? __( 'Add to my roster', 'leagueflow' ) : __( 'Approve', 'leagueflow' ) ); ?></button>
 						</form>
@@ -1460,6 +1463,7 @@ class Portal {
 								<?php echo $this->render_hidden_fields( 'review_join_request' ); ?>
 								<input type="hidden" name="lf_join_request_id" value="<?php echo esc_attr( (string) $request->ID ); ?>" />
 								<input type="hidden" name="lf_team_id" value="<?php echo esc_attr( (string) $team_id ); ?>" />
+								<input type="hidden" name="lf_request_state" value="<?php echo esc_attr( $request_state ); ?>" />
 								<input type="hidden" name="lf_join_decision" value="decline" />
 								<button type="submit"><?php esc_html_e( 'Decline', 'leagueflow' ); ?></button>
 							</form>
@@ -2098,6 +2102,8 @@ class Portal {
 			);
 		}
 
+		$captain_teams_before = get_player_team_ids( $captain_id );
+
 		if ( ! assign_player_to_team( $captain_id, (int) $team_id, array( 'is_captain' => 1 ) ) ) {
 			wp_delete_post( $team_id, true );
 
@@ -2151,6 +2157,8 @@ class Portal {
 			$this->redirect_with_notice( 'upload-error' );
 		}
 
+		// Only after every rollback point: the captain's own matching pending requests close.
+		reconcile_roster_additions( $captain_id, $captain_teams_before, 'portal_roster' );
 		add_user_role_if_missing( $user->ID, 'leagueflow_team_manager' );
 
 		$this->redirect_with_notice(
@@ -2206,28 +2214,36 @@ class Portal {
 			$this->redirect_with_notice( 'team-denied' );
 		}
 
-		if ( 'approve' === $decision ) {
-			if ( $this->player_has_other_team_in_sport( $player_id, $request_sport_slug, $team_id ) ) {
-				$this->redirect_with_notice( 'player-assigned' );
-			}
-
-			if ( ! assign_player_to_team( $player_id, $team_id ) ) {
-				$this->redirect_with_notice( 'invalid-request' );
-			}
-
-			update_post_meta( $request_id, 'lf_request_status', 'approved' );
-			update_post_meta( $request_id, 'lf_team_id', $team_id );
-			$this->notify_player_request_decision( $request_id, 'approved', $team_id );
-			$this->redirect_with_notice( 'join-request-approved' );
+		if ( ! in_array( $decision, array( 'approve', 'decline' ), true ) ) {
+			$this->redirect_with_notice( 'invalid-request' );
 		}
 
-		if ( 'decline' === $decision ) {
-			update_post_meta( $request_id, 'lf_request_status', 'declined' );
-			$this->notify_player_request_decision( $request_id, 'declined', $team_id );
-			$this->redirect_with_notice( 'join-request-declined' );
+		// The same per-request lock, fresh re-read and state token as the staff
+		// inbox: a captain and staff (or a double click) cannot both decide.
+		$result = Join_Request_Service::shared()->apply_team_manager_decision(
+			$request_id,
+			$decision,
+			$team_id,
+			(int) $user->ID,
+			sanitize_key( wp_unslash( $_POST['lf_request_state'] ?? '' ) ),
+			function ( $managed_team_id ) use ( $user ) {
+				return $this->user_can_manage_team( $managed_team_id, $user->ID );
+			}
+		);
+
+		if ( is_wp_error( $result ) ) {
+			$notices = array(
+				'leagueflow_request_member'  => 'player-assigned',
+				'leagueflow_request_denied'  => 'team-denied',
+				'leagueflow_request_team'    => 'team-denied',
+				'leagueflow_request_missing' => 'invalid-request',
+				'leagueflow_request_failed'  => 'invalid-request',
+			);
+			$this->redirect_with_notice( $notices[ $result->get_error_code() ] ?? 'join-request-changed' );
 		}
 
-		$this->redirect_with_notice( 'invalid-request' );
+		$this->notify_player_request_decision( $request_id, 'approve' === $decision ? 'approved' : 'declined', $team_id );
+		$this->redirect_with_notice( 'approve' === $decision ? 'join-request-approved' : 'join-request-declined' );
 	}
 
 	/**
@@ -2427,6 +2443,8 @@ class Portal {
 			);
 		}
 
+		$teams_before = get_player_team_ids( $player_id );
+
 		assign_player_to_team(
 			$player_id,
 			$team_id,
@@ -2436,6 +2454,7 @@ class Portal {
 				'is_captain'    => ! empty( $_POST['lf_is_captain'] ) ? 1 : 0,
 			)
 		);
+		reconcile_roster_additions( $player_id, $teams_before, 'portal_roster' );
 
 		if ( '' !== $email && ( ! $owner_id || current_user_can( 'manage_options' ) ) ) {
 			update_post_meta( $player_id, 'lf_email', $email );
@@ -4170,6 +4189,7 @@ class Portal {
 			'placement-request-sent' => __( 'Your placement request was sent.', 'leagueflow' ),
 			'join-request-approved' => __( 'Join request approved.', 'leagueflow' ),
 			'join-request-declined' => __( 'Join request declined.', 'leagueflow' ),
+			'join-request-changed'  => __( 'That request changed or was reviewed by someone else since this page loaded. Nothing was changed; review the current list.', 'leagueflow' ),
 			'availability-saved' => __( 'Availability updated.', 'leagueflow' ),
 			'join-request-exists' => __( 'You already have a pending request for that team.', 'leagueflow' ),
 			'placement-request-exists' => __( 'You already have a pending placement request for that sport.', 'leagueflow' ),
