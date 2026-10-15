@@ -94,7 +94,7 @@ try {
 	$r = lfapi_request( 'match-events', array( 'competition' => $ctx['lf_competition'], 'date' => '2030-10-16', 'limit' => 1 ) );
 	lfapi_check( array( $c ) === lfapi_ids( $r ) && false !== strpos( $r->get_data()['pagination']['nextUrl'], 'date=2030-10-16' ), 'Upcoming date anchor is preserved in pagination URLs.' );
 	$r = lfapi_request( 'match-events', array( 'competition' => $ctx['lf_competition'], 'start_date' => '2030-12-15', 'end_date' => '2030-12-15' ) );
-	lfapi_check( array( $winter ) === lfapi_ids( $r ) && '2030-12-15T18:30:45-08:00' === $r->get_data()['events'][0]['startDate'], 'Explicit ranges include historical/future dates and winter offset/seconds.' );
+	lfapi_check( array( $winter ) === lfapi_ids( $r ) && '2030-12-15T18:30:45-08:00' === $r->get_data()['events'][0]['startDate'], 'Explicit ranges include historical/future dates and winter offset/seconds: ' . wp_json_encode( $r->get_data() ) );
 	add_post_meta( $winter, 'lf_match_datetime', '2020-01-01 01:00' );
 	lfapi_check( array( $winter ) === lfapi_ids( lfapi_request( 'match-events', $scope + array( 'start_date' => '2030-12-15', 'end_date' => '2030-12-15' ) ) ), 'Duplicate legacy date metadata follows the same first-value rule as serialization.' );
 	foreach ( array( 'sport' => 'lf_sport', 'league_level' => 'lf_league_level', 'season' => 'lf_season' ) as $param => $tax ) {
