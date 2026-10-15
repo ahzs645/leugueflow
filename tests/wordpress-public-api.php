@@ -94,7 +94,7 @@ try {
 	$r = lfapi_request( 'match-events', array( 'competition' => $ctx['lf_competition'], 'date' => '2030-10-16', 'limit' => 1 ) );
 	lfapi_check( array( $c ) === lfapi_ids( $r ) && false !== strpos( $r->get_data()['pagination']['nextUrl'], 'date=2030-10-16' ), 'Upcoming date anchor is preserved in pagination URLs.' );
 	$r = lfapi_request( 'match-events', array( 'competition' => $ctx['lf_competition'], 'start_date' => '2030-12-15', 'end_date' => '2030-12-15' ) );
-	lfapi_check( array( $winter ) === lfapi_ids( $r ) && '2030-12-15T18:30:45-08:00' === $r->get_data()['events'][0]['startDate'], 'Explicit ranges include historical/future dates and winter offset/seconds: ' . wp_json_encode( $r->get_data() ) );
+	lfapi_check( array( $winter ) === lfapi_ids( $r ) && 0 === strpos( $r->get_data()['events'][0]['startDate'], '2030-12-15T18:30:45' ), 'Explicit ranges preserve the stored local date and seconds: ' . wp_json_encode( $r->get_data() ) );
 	add_post_meta( $winter, 'lf_match_datetime', '2020-01-01 01:00' );
 	lfapi_check( array( $winter ) === lfapi_ids( lfapi_request( 'match-events', $scope + array( 'start_date' => '2030-12-15', 'end_date' => '2030-12-15' ) ) ), 'Duplicate legacy date metadata follows the same first-value rule as serialization.' );
 	foreach ( array( 'sport' => 'lf_sport', 'league_level' => 'lf_league_level', 'season' => 'lf_season' ) as $param => $tax ) {
@@ -142,8 +142,13 @@ try {
 	}
 	$r = lfapi_request( 'match-events', $scope + array( 'start_date' => '2099-01-01' ) );
 	lfapi_check( 0 === $r->get_data()['total'] && false !== strpos( wp_json_encode( $r->get_data() ), '"eventMetadata":{}' ), 'Empty feeds retain an object metadata map.' );
-	$gap = $match( '2031-03-09 02:30' );
-	$r = lfapi_request( 'match-events', $scope + array( 'start_date' => '2031-03-09', 'end_date' => '2031-03-09' ) );
+	// Historical dates avoid assuming that a jurisdiction will keep seasonal DST.
+	$summer_2025 = $match( '2025-07-15 18:30' );
+	$winter_2025 = $match( '2025-12-15 18:30' );
+	$r = lfapi_request( 'match-events', $scope + array( 'start_date' => '2025-07-15', 'end_date' => '2025-12-15' ) );
+	lfapi_check( array( $summer_2025, $winter_2025 ) === lfapi_ids( $r ) && '2025-07-15T18:30:00-07:00' === $r->get_data()['events'][0]['startDate'] && '2025-12-15T18:30:00-08:00' === $r->get_data()['events'][1]['startDate'], 'Historical summer/winter offsets follow the date, not the server default timezone.' );
+	$gap = $match( '2025-03-09 02:30' );
+	$r = lfapi_request( 'match-events', $scope + array( 'start_date' => '2025-03-09', 'end_date' => '2025-03-09' ) );
 	lfapi_check( array( $gap ) === lfapi_ids( $r ) && null === $r->get_data()['events'][0]['startDate'] && 'invalid_local_time' === $r->get_data()['events'][0]['timeStatus'], 'Nonexistent DST wall time is flagged without inventing a shifted kickoff.' );
 	WP_CLI::success( 'Public match API: ' . $lfapi_checks . ' assertions passed.' );
 } finally {

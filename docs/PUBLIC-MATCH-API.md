@@ -128,7 +128,11 @@ existing winner precedence. Knockout penalties/rulings retain `winnerOverride`.
 
 Dates mean the **WordPress site's configured timezone**; the API does not change
 that setting or assume a particular campus timezone. `startDate` includes the
-correct UTC offset for that date, including seasonal daylight-saving changes.
+UTC offset from PHP's timezone database for that date, including historical
+daylight-saving changes. Hosts must keep timezone data current when regional
+rules change; a timezone name does not imply that every future winter uses the
+old standard-time offset. For example, [B.C. ended seasonal clock changes in
+2026](https://news.gov.bc.ca/releases/2026CITZ0009-001073).
 No end time is stored for matches, so `endDate` is null. Canonical stored kickoff
 values use `YYYY-MM-DD HH:MM[:SS]`; unscheduled/invalid calendar dates are excluded
 before pagination. A nonexistent local clock time during a DST jump is retained
