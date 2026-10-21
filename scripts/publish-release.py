@@ -12,7 +12,7 @@ from build import ROOT, REPOSITORY, VERSION, metadata
 
 
 class GitHub:
-    repository = "amirrad98/intramurals"
+    repository = "ahzs645/leugueflow"
 
     def command(self, *arguments):
         result = subprocess.run(["gh", *arguments, "--repo", self.repository], capture_output=True, text=True)

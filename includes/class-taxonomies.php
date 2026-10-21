@@ -98,6 +98,7 @@ class Taxonomies {
 		?>
 		<div class="form-field">
 			<label>
+				<input type="hidden" name="leagueflow_season_current_present" value="1" />
 				<input type="checkbox" name="lf_is_current" value="1" />
 				<?php esc_html_e( 'Make this the current season for its sport', 'leagueflow' ); ?>
 			</label>
@@ -119,6 +120,7 @@ class Taxonomies {
 			<th scope="row"><?php esc_html_e( 'Current season', 'leagueflow' ); ?></th>
 			<td>
 				<label>
+					<input type="hidden" name="leagueflow_season_current_present" value="1" />
 					<input type="checkbox" name="lf_is_current" value="1" <?php checked( $is_current ); ?> />
 					<?php esc_html_e( 'Make this the current season for its sport', 'leagueflow' ); ?>
 				</label>
@@ -140,6 +142,12 @@ class Taxonomies {
 			return;
 		}
 
+		// REST, imports and programmatic renames do not submit the season form.
+		// An absent checkbox only means "clear" when that form was actually shown.
+		if ( ! isset( $_POST['leagueflow_season_current_present'] ) && ! isset( $_POST['lf_is_current'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing
+			flush_current_season_cache();
+			return;
+		}
 		// Quick Edit does not post this field; leave the current season alone there.
 		if ( ! isset( $_POST['lf_is_current'] ) && ( isset( $_POST['action'] ) && 'inline-save-tax' === $_POST['action'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing
 			flush_current_season_cache();

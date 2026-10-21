@@ -2,16 +2,39 @@
 
 LeagueFlow is a classic WordPress plugin for running multi-sport leagues with teams, players, fixtures, derived standings, and knockout brackets. It uses WordPress-native admin screens, metaboxes, taxonomies, dynamic Gutenberg blocks, and shortcodes.
 
+## Intramurals and calendar update (1.1.0)
+
+The calendar now loads the visible date range and completes paginated month/week/day
+results, with explicit loading and retry states. Its block controls follow the
+CampusManager calendar's view, display, cost and ordering patterns while retaining
+LeagueFlow's sports, teams and seasons. Drop-ins and other non-match events share
+the same calendar. Existing `leagueflow/match-calendar` blocks and shortcodes remain
+supported.
+
+Staff can explicitly save final results, diagnose exclusions from standings, assign
+limited referee access, configure personal waiver/Code of Conduct acknowledgements,
+and preview closure of already-placed requests. **LeagueFlow → Staff guide** explains
+the routine workflows inside WordPress.
+
+- [Review, priorities and rollout](docs/REVIEW-2026-10-21.md)
+- [Calendar reference mapping and block settings](docs/CALENDAR-REBUILD.md)
+- [Registration documents and placements](docs/REGISTRATION-AND-PLACEMENTS.md)
+- [Standings, knockout and scheduling audit](docs/LOGIC-AUDIT-2026-10-21.md)
+
 ## GitHub releases and WordPress updates
 
 Requires **WordPress 6.5+ and PHP 8.1+**. Download the attached
-`leagueflow-X.Y.Z.zip` from [GitHub Releases](https://github.com/amirrad98/intramurals/releases).
+`leagueflow-X.Y.Z.zip` from [GitHub Releases](https://github.com/ahzs645/leugueflow/releases).
 Install it through **Plugins → Add New → Upload Plugin**. The package contains the
 stable `leagueflow/` directory. Use this asset rather than GitHub's generated source
 archives, which contain development tooling and have a different directory name.
 
-Sites running 1.0.1 or earlier must upload the updater-enabled 1.0.2 release once and
-replace the existing installation. While LeagueFlow is active, later stable releases
+Older builds that do not include the updater, or point at the previous repository,
+must upload the built ZIP once and replace the existing `leagueflow/` installation.
+The 1.1.0 update feed points to **ahzs645/leugueflow**. It can offer automatic updates
+only after a verified stable release and its assets are published in that repository.
+Branch and pull-request artifacts are review packages, not published stable releases.
+While LeagueFlow is active, later stable releases
 appear through WordPress's normal plugin update checks. **Dashboard → Updates →
 Check again** requests a check; successful release metadata is cached for five
 minutes. A site does not need a GitHub token. Administrators choose when to install
@@ -64,7 +87,8 @@ artifacts but do not publish releases. No additional GitHub secrets are required
 Native integration sets `LEAGUEFLOW_TEST_PACKAGE` to the built ZIP and runs
 `wp eval-file tests/wordpress-security.php`, then
 `LEAGUEFLOW_DISPOSABLE_WP=1 wp eval-file tests/wordpress-portal.php` and
-`tests/wordpress-portal-http.php` and `tests/wordpress-admin.php`, followed by
+`tests/wordpress-portal-http.php` and `tests/wordpress-admin.php`, then the standings,
+scheduling, calendar, registration, REST identity, referee and public API suites, followed by
 `wp eval-file tests/wordpress-update.php` on an isolated
 `http://leagueflow.test` installation with MySQL, PHP 8.2, WP-CLI, `zip`, `mysqli`,
 `curl`, `gd` and the built plugin activated. The portal HTTP program starts PHP's
@@ -76,12 +100,12 @@ host, theme or league workflow.
 
 ## Architecture
 
-- `lf_team`, `lf_player`, and `lf_match` are shared custom post types used across all sports.
+- `lf_team`, `lf_player`, `lf_match`, `lf_calendar_event` and `lf_join_request` are shared custom post types used across all sports.
 - `lf_sport` is the core taxonomy that assigns every team, player, and match to a sport module.
 - `lf_league_level` assigns teams, players, matches, and calendar events to league levels such as Recreational and Competitive inside each sport.
 - `lf_competition` and `lf_season` are taxonomies shared by teams and matches.
 - `Sports_Manager` defines built-in sports, enables or disables sport modules, creates sport-specific admin menus, and exposes sport-specific match fields and icons.
-- Standings are calculated from finished match scores and are never entered manually.
+- Standings are calculated from published, finished league results. Team point adjustments remain supported; knockout results are excluded.
 - Knockout brackets are built from match meta (`lf_is_knockout`, `lf_round_label`, `lf_round_order`, `lf_next_match_id`, `lf_next_match_slot`).
 - Frontend blocks and shortcodes use the same server-side renderer for consistent output.
 - LeagueFlow ships portable public templates for team pages, match pages, and match archives. Classic themes use the bundled PHP wrappers, and block themes receive plugin-registered block templates unless the active theme or Site Editor provides a more specific override.
@@ -146,10 +170,10 @@ leagueflow/
 
 ## Admin Usage
 
-All LeagueFlow screens live under one `LeagueFlow` menu, in workflow order.
+All LeagueFlow screens are available under the `LeagueFlow` menu, in workflow order.
 A bar at the top of each screen shows where you are and switches the sport
 (`All sports`, `Soccer`, …); edit screens link back to the list for the
-record's sport. Old per-sport admin links redirect to the matching screen.
+record's sport. Enabled sports also have shortcuts to the shared screens.
 `docs/ADMIN-WORKFLOW.md` describes the journey and every behaviour in detail.
 
 ### Setup
@@ -164,9 +188,10 @@ record's sport. Old per-sport admin links redirect to the matching screen.
 - League levels are one list shared by every sport (`LeagueFlow > League Levels (all sports)`).
 - Competitions and seasons each belong to one sport. Mark a season as the
   current season for its sport on its edit screen; other sports keep theirs.
-  Blocks and shortcodes without a season use their sport's current season (or
-  every season when none is set). Admin screens show all seasons unless you
-  choose `Current season`.
+  Blocks and shortcodes resolve an omitted season to the sport's current season
+  when one is configured. The block inspector explicitly distinguishes
+  **All seasons** (`all`) from **Current season** (blank or `current`). Admin
+  screens show all seasons unless you choose Current season.
 
 ### Teams and Players
 
@@ -245,6 +270,7 @@ record's sport. Old per-sport admin links redirect to the matching screen.
 - `Team Roster`
 - `Match List`
 - `Match Card`
+- `Sports Calendar`
 - `Knockout Bracket`
 
 All blocks are dynamic server-side blocks and inherit the classic frontend styling from the plugin. League table, team list, match list, calendar, and knockout bracket blocks support `sport` and `league_level` attributes so editors can target a specific sport module and level. Sport Standings displays enabled sports split by league level as expandable standings panels.
@@ -259,6 +285,8 @@ All blocks are dynamic server-side blocks and inherit the classic frontend styli
 - `[knockout_bracket competition="2026-cup" season="2026-spring" sport="soccer" league_level="competitive"]`
 - `[team_list competition="spring-league" season="2026-spring" sport="soccer" league_level="recreational"]`
 - `[match_card match="456"]`
+- `[match_calendar season="all" include_events="1" month_display="sidebar"]`
+- `[leagueflow_referee]`
 
 Shortcode attributes accept IDs or slugs where appropriate.
 
@@ -304,10 +332,11 @@ the team's unlocked profile and recent matches remain available. Staff retain
 private-team access through WordPress's normal permissions.
 
 Embedded match lists default to 20. `[match_calendar]` starts with up to 100
-records and provides **Load next schedule page** whenever more records exist.
-Each explicit request is capped at 100 and retains the original shortcode filters.
-An explicit `limit` sets the batch size (maximum 100). These views never automatically load all historical
-records; use date/taxonomy scopes or the paginated REST endpoints for larger feeds.
+records from the initial date range. Month/week/day views automatically complete
+that range in bounded requests; the upcoming list loads additional pages through
+**Load more events**. Each request retains the block/shortcode scope and is capped
+at 100; `limit` controls batch size. Earlier schedule history is not loaded merely
+to open a later month.
 
 Both `POST /calendar/events` and `POST /events/create-calendar-event` require
 WordPress event creation/editing permission. Users who can publish default to

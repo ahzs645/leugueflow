@@ -101,7 +101,7 @@
 	}
 
 	function isFutureOrToday( event, todayKey ) {
-		return event.day >= todayKey;
+		return event.day >= todayKey || ( event.endDate && event.endDate > parseDay( todayKey ) );
 	}
 
 	function cleanFilename( title ) {
@@ -121,6 +121,9 @@
 	}
 
 	function init( root ) {
+		var document = root.ownerDocument;
+		var window = document.defaultView;
+		if ( root.dataset.calendarInitialized ) { return; }
 		var dataNode = root.querySelector( '[data-calendar-data]' );
 
 		if ( ! dataNode ) {
@@ -180,12 +183,17 @@
 		var viewButtons = root.querySelectorAll( '[data-calendar-view]' );
 		var dialog = root.querySelector( '[data-calendar-dialog]' );
 		var dialogContent = root.querySelector( '[data-calendar-dialog-content]' );
+		var panelWrap = root.querySelector( '[data-calendar-panel]' );
+		var panelClose = root.querySelector( '[data-calendar-panel-close]' );
+		var jumpInput = root.querySelector( '[data-calendar-jump]' );
+		var monthDisplay = [ 'popover', 'dropdown', 'sidebar' ].indexOf( config.monthDisplay ) >= 0 ? config.monthDisplay : 'sidebar';
 		var mobileQuery = window.matchMedia ? window.matchMedia( '(max-width: 760px)' ) : null;
 
 		if ( ! stage || ! panelList || ! rangeLabel ) {
 			return;
 		}
 
+		root.dataset.calendarInitialized = 'true';
 		var sportColors = {};
 
 		sports.forEach( function ( sport ) {
@@ -198,7 +206,7 @@
 		var listInitial = parseInt( config.listInitial, 10 ) || 30;
 		var listMore = parseInt( config.listMore, 10 ) || 15;
 
-		if ( events.length && ! events.some( function ( event ) {
+		if ( ! config.rangeLoading && events.length && ! events.some( function ( event ) {
 			return monthKey( event.startDate ) === monthKey( today );
 		} ) ) {
 			var upcoming = events.filter( function ( event ) {
@@ -239,20 +247,20 @@
 		}
 
 		function eventsForDay( key, source ) {
-			return source.filter( function ( event ) {
-				return event.day === key;
+			var start = parseDay( key ), end = addDays( start, 1 );
+			return source.filter( function ( event ) { return event.startDate < end && event.endDate > start; } ).map( function ( event ) {
+				return Object.assign( {}, event, { _original: event, _startMinute: event.startDate < start ? 0 : event.startDate.getHours() * 60 + event.startDate.getMinutes(), _endMinute: event.endDate >= end ? 1440 : event.endDate.getHours() * 60 + event.endDate.getMinutes(), time: event.startDate < start ? ( strings.continues || 'Continues' ) : event.time } );
 			} );
 		}
 
 		function eventsForMonth( date, source ) {
-			var key = monthKey( date );
-			return source.filter( function ( event ) {
-				return monthKey( event.startDate ) === key;
-			} );
+			var start = new Date( date.getFullYear(), date.getMonth(), 1 ), end = new Date( date.getFullYear(), date.getMonth() + 1, 1 );
+			return source.filter( function ( event ) { return event.startDate < end && event.endDate > start; } );
 		}
 
 		function isMobileCalendar() {
-			return !! ( mobileQuery && mobileQuery.matches );
+			var width = root.getBoundingClientRect().width;
+			return ( width > 0 && width <= 760 ) || !! ( mobileQuery && mobileQuery.matches );
 		}
 
 		function defaultMobileMonthDay( source ) {
@@ -276,6 +284,8 @@
 			root.classList.toggle( 'is-mobile-calendar', mobile );
 			root.classList.remove( 'is-view-month', 'is-view-list', 'is-view-week', 'is-view-day' );
 			root.classList.add( 'is-view-' + state.view );
+			root.classList.add( 'is-month-' + monthDisplay );
+			root.classList.toggle( 'is-sidebar-left', 'left' === config.sidebarPosition );
 
 			if ( mobile && 'week' === state.view ) {
 				state.view = 'month';
@@ -283,7 +293,7 @@
 				root.classList.add( 'is-view-month' );
 			}
 
-			if ( mobile && 'month' === state.view && ! state.selectedDay && ! state.fullMonth ) {
+			if ( mobile && 'month' === state.view && 'sidebar' === monthDisplay && ! state.selectedDay && ! state.fullMonth ) {
 				state.selectedDay = defaultMobileMonthDay( source );
 			}
 		}
@@ -336,7 +346,7 @@
 				bits.push( event.round );
 			}
 
-			if ( event.cost ) {
+			if ( false !== config.showCost && event.cost ) {
 				bits.push( event.cost );
 			}
 
@@ -398,10 +408,12 @@
 
 		function renderPanel( source ) {
 			panelList.textContent = '';
+			if ( panelWrap ) { panelWrap.hidden = 'list' === state.view || ( 'month' === state.view && 'sidebar' !== monthDisplay && ! state.selectedDay ); }
+			if ( panelClose ) { panelClose.hidden = ! ( 'month' === state.view && 'sidebar' !== monthDisplay && state.selectedDay ); }
 
 			if ( state.selectedDay ) {
 				panelTitle.textContent = sprintf( strings.eventsOn || 'Schedule on %s', formatDateKey( state.selectedDay, monthNames, weekdays ) );
-				clearBtn.hidden = false;
+				clearBtn.hidden = 'sidebar' !== monthDisplay && 'month' === state.view;
 
 				var selectedItems = eventsForDay( state.selectedDay, source );
 
@@ -476,6 +488,9 @@
 				var items = eventsForDay( key, source );
 				var day = button( 'leagueflow-calendar__day' + ( items.length ? ' has-games' : '' ) + ( key === todayKey ? ' is-today' : '' ) + ( key === state.selectedDay ? ' is-selected' : '' ) );
 				day.dataset.day = key;
+				day.setAttribute( 'aria-label', formatDateKey( key, monthNames, weekdays ) + ': ' + items.length + ' ' + ( strings.eventsPlural || 'events' ) );
+				day.setAttribute( 'aria-expanded', state.selectedDay === key ? 'true' : 'false' );
+				if ( panelWrap ) { day.setAttribute( 'aria-controls', panelWrap.id || ( panelWrap.id = root.id + '-day-panel' ) ); }
 				day.appendChild( el( 'span', 'leagueflow-calendar__day-num', String( dayNum ) ) );
 
 				if ( items.length ) {
@@ -501,6 +516,8 @@
 					state.selectedDay = state.selectedDay === this.dataset.day ? null : this.dataset.day;
 					state.date = parseDay( this.dataset.day );
 					render();
+					var selectedControl = root.querySelector( '[data-day="' + key + '"]' );
+					if ( selectedControl ) { selectedControl.focus(); }
 				} );
 
 				grid.appendChild( day );
@@ -530,6 +547,7 @@
 			var shown = upcoming.slice( 0, state.listCount );
 			var grouped = groupEventsByDay( shown );
 			var keys = Object.keys( grouped ).sort();
+			if ( 'desc' === config.eventSortOrder ) { keys.reverse(); }
 			var wrap = el( 'div', 'leagueflow-calendar__list-view' );
 
 			if ( ! keys.length ) {
@@ -552,10 +570,12 @@
 				wrap.appendChild( group );
 			} );
 
-			if ( upcoming.length > shown.length ) {
+			if ( upcoming.length > shown.length || ( config.rangeLoading && pagination.nextPage ) ) {
 				var more = button( 'leagueflow-calendar__load-more', strings.loadMore || 'Load more events' );
+				more.disabled = loadingPage;
 				more.addEventListener( 'click', function () {
 					state.listCount += listMore;
+					if ( shown.length >= upcoming.length && pagination.nextPage ) { loadCalendarPage( activeScope, pagination.nextPage, false ); }
 					render();
 				} );
 				wrap.appendChild( more );
@@ -573,8 +593,8 @@
 			var max = 0;
 
 			items.forEach( function ( event ) {
-				min = Math.min( min, event.startDate.getHours() );
-				max = Math.max( max, event.endDate.getHours() + ( event.endDate.getMinutes() > 0 ? 1 : 0 ) );
+				min = Math.min( min, undefined !== event._startMinute ? Math.floor( event._startMinute / 60 ) : event.startDate.getHours() );
+				max = Math.max( max, undefined !== event._endMinute ? Math.ceil( event._endMinute / 60 ) : event.endDate.getHours() + ( event.endDate.getMinutes() > 0 ? 1 : 0 ) );
 			} );
 
 			return {
@@ -596,8 +616,8 @@
 		}
 
 		function eventBlockPosition( event, hourStart ) {
-			var start = event.startDate.getHours() + event.startDate.getMinutes() / 60;
-			var end = event.endDate.getHours() + event.endDate.getMinutes() / 60;
+			var start = undefined !== event._startMinute ? event._startMinute / 60 : event.startDate.getHours() + event.startDate.getMinutes() / 60;
+			var end = undefined !== event._endMinute ? event._endMinute / 60 : event.endDate.getHours() + event.endDate.getMinutes() / 60;
 			var duration = Math.max( 0.5, end - start );
 
 			return {
@@ -695,9 +715,7 @@
 				weekDays.push( addDays( weekStart, i ) );
 			}
 
-			weekItems = source.filter( function ( event ) {
-				return event.startDate >= weekStart && event.startDate < addDays( weekStart, 7 );
-			} );
+			weekDays.forEach( function ( date ) { weekItems = weekItems.concat( eventsForDay( dayKeyFromDate( date ), source ) ); } );
 
 			var hours = visibleHours( weekItems );
 			var wrap = el( 'div', 'leagueflow-calendar__week-view' );
@@ -784,6 +802,7 @@
 		}
 
 		function render() {
+			ensureVisibleRange();
 			var source = filteredEvents();
 
 			applyResponsiveState( source );
@@ -809,6 +828,22 @@
 			}
 
 			renderPanel( source );
+			if ( jumpInput ) { jumpInput.value = dayKeyFromDate( state.date ); jumpInput.parentElement.hidden = 'list' === state.view; }
+			if ( panelWrap && 'popover' === monthDisplay && 'month' === state.view && state.selectedDay && ! isMobileCalendar() ) {
+				var selectedCell = root.querySelector( '[data-day="' + state.selectedDay + '"]' );
+				var layout = root.querySelector( '.leagueflow-calendar__layout' );
+				if ( selectedCell && layout ) {
+					var cellRect = selectedCell.getBoundingClientRect(), layoutRect = layout.getBoundingClientRect();
+					panelWrap.style.left = Math.max( 0, Math.min( cellRect.left - layoutRect.left, layoutRect.width - 360 ) ) + 'px';
+					panelWrap.style.top = cellRect.bottom - layoutRect.top + 8 + 'px';
+				}
+			} else if ( panelWrap ) { panelWrap.style.left = ''; panelWrap.style.top = ''; }
+			if ( config.rangeLoading && ! events.length && ( loadingPage || pageError ) ) {
+				var statusText = pageError || strings.rangeLoading || 'Loading this schedule…';
+				stage.textContent = '';
+				stage.appendChild( el( 'p', 'leagueflow-calendar__empty', statusText ) );
+				panelList.textContent = statusText;
+			}
 			root.classList.add( 'is-ready' );
 		}
 
@@ -832,6 +867,7 @@
 		var dialogReturnFocus = null;
 
 		function openDialog( event ) {
+			event = event._original || event;
 			if ( ! dialog || ! dialogContent ) {
 				return;
 			}
@@ -841,7 +877,7 @@
 			dialogContent.textContent = '';
 
 			var title = el( 'h3', 'leagueflow-calendar__dialog-title', 'match' === event.source ? event.home + ' vs ' + event.away : event.title );
-			title.id = 'leagueflow-calendar-dialog-title';
+			title.id = dialog.querySelector( '[role="dialog"]' ).getAttribute( 'aria-labelledby' ) || 'leagueflow-calendar-dialog-title';
 			dialogContent.appendChild( title );
 
 			var badges = el( 'div', 'leagueflow-calendar__dialog-badges' );
@@ -870,13 +906,15 @@
 				details.appendChild( el( 'dd', null, value ) );
 			}
 
-			addDetail( strings.date || 'Date', formatDateKey( event.day, monthNames, weekdays ) );
+			var dateLabel = formatDateKey( event.day, monthNames, weekdays );
+			if ( dayKeyFromDate( event.endDate ) !== event.day ) { dateLabel += ' – ' + formatDateKey( dayKeyFromDate( event.endDate ), monthNames, weekdays ); }
+			addDetail( strings.date || 'Date', dateLabel );
 			addDetail( 'Time', event.time + ' - ' + event.endTime );
 			addDetail( 'Venue', event.venue );
 			addDetail( strings.level || 'Level', event.leagueLevelLabel );
 			addDetail( 'Competition', event.competition );
 			addDetail( 'Season', event.season );
-			addDetail( strings.cost || 'Cost', event.cost );
+			if ( false !== config.showCost ) { addDetail( strings.cost || 'Cost', event.cost ); }
 
 			if ( event.registrationRequired ) {
 				addDetail( 'Registration', strings.registration || 'Registration required' );
@@ -909,6 +947,18 @@
 			google.target = '_blank';
 			google.rel = 'noopener noreferrer';
 			actions.appendChild( google );
+
+			var outlook = el( 'a', 'leagueflow-calendar__dialog-action', strings.addOutlook || 'Add to Outlook' );
+			var outlookUrl = new URL( 'https://outlook.live.com/calendar/0/deeplink/compose' );
+			outlookUrl.searchParams.set( 'path', '/calendar/action/compose' );
+			outlookUrl.searchParams.set( 'rru', 'addevent' );
+			outlookUrl.searchParams.set( 'subject', event.title );
+			outlookUrl.searchParams.set( 'startdt', event.startInstant.toISOString() );
+			outlookUrl.searchParams.set( 'enddt', event.endInstant.toISOString() );
+			outlookUrl.searchParams.set( 'location', event.venue || '' );
+			outlookUrl.searchParams.set( 'body', [ event.description, event.url ].filter( Boolean ).join( '\n\n' ) );
+			outlook.href = outlookUrl.toString(); outlook.target = '_blank'; outlook.rel = 'noopener noreferrer';
+			actions.appendChild( outlook );
 
 			var apple = el( 'a', 'leagueflow-calendar__dialog-action', strings.addApple || strings.downloadIcs || 'Add to your Apple Calendar' );
 			apple.href = icsUrl( event );
@@ -983,29 +1033,68 @@
 		var pageBox = root.querySelector( '[data-calendar-pagination]' );
 		var pagination = data.pagination || {};
 		var loadingPage = false;
+		var pageError = '';
+		var failedPage = null;
+		var requestVersion = 0;
+		var pageController = null;
+		var activeScope = config.rangeLoading ? Object.assign( {}, config.calendarRange || {}, { sport: '', type: '', search: '' } ) : {};
+		var activeScopeKey = JSON.stringify( activeScope );
+		var knownSports = {};
+		var knownTypes = {};
+		( data.sports || [] ).forEach( function ( item ) { knownSports[ item.slug ] = item.label; } );
+		( data.types || [] ).forEach( function ( item ) { knownTypes[ item.slug ] = item.label; } );
+
+		function visibleScope() {
+			var start = new Date( state.date.getFullYear(), state.date.getMonth(), 1 );
+			var end = new Date( state.date.getFullYear(), state.date.getMonth() + 1, 0 );
+			if ( 'week' === state.view && ! isMobileCalendar() ) { start = startOfWeekDate( state.date, startOfWeek ); end = addDays( start, 6 ); }
+			if ( 'day' === state.view ) { start = state.date; end = state.date; }
+			if ( 'list' === state.view ) { start = today; end = null; }
+			return { start_date: dayKeyFromDate( start ), end_date: end ? dayKeyFromDate( end ) : '', sport: state.sport, type: state.type, search: state.search.trim() };
+		}
+
+		function ensureVisibleRange() {
+			if ( ! config.rangeLoading || ! config.calendarEndpoint ) { return; }
+			var scope = visibleScope();
+			if ( JSON.stringify( scope ) !== activeScopeKey ) { loadCalendarPage( scope, 1, true ); }
+			else if ( state.view !== 'list' && pagination.nextPage && ! loadingPage && ! failedPage ) {
+				// Complete the visible range in bounded pages. Lists remain
+				// incremental, but a month must not omit its later fixtures.
+				loadCalendarPage( scope, pagination.nextPage, false );
+			}
+		}
 
 		function showPageProgress( message ) {
-			if ( pageStatus ) {
-				pageStatus.textContent = message || ( strings.batchProgress || '%1$d of %2$d scheduled events loaded.' ).replace( '%1$d', events.length ).replace( '%2$d', pagination.total );
+			var text = message || ( strings.batchProgress || '%1$d of %2$d scheduled events loaded.' ).replace( '%1$d', events.length ).replace( '%2$d', pagination.total || 0 );
+			if ( loadingPage ) { text = strings.rangeLoading || 'Loading this schedule…'; }
+			else if ( config.rangeLoading && pagination.nextPage && ! message ) { text += ' ' + ( strings.rangePartial || 'More events exist in this range. Load the next page to see them.' ); }
+			if ( pageStatus ) { pageStatus.textContent = text; }
+			if ( pageBox ) { pageBox.hidden = ! ( pagination.nextPage || loadingPage || message ); }
+			if ( pageButton ) {
+				pageButton.disabled = loadingPage;
+				pageButton.hidden = config.rangeLoading && 'list' === state.view && ! failedPage;
+				pageButton.textContent = failedPage ? ( strings.retry || 'Retry loading schedule' ) : ( strings.loadPage || 'Load next schedule page' );
 			}
-			if ( pageBox ) { pageBox.hidden = ! pagination.nextPage; }
-			if ( pageButton ) { pageButton.disabled = loadingPage; }
+			root.setAttribute( 'aria-busy', loadingPage ? 'true' : 'false' );
 		}
 
 		function refreshLoadedFilters( selector, attribute, labelField, allLabel, selected ) {
 			var group = root.querySelector( selector );
 			if ( ! group ) { return; }
 			var choices = {};
+			var known = attribute === 'sport' ? knownSports : knownTypes;
+			if ( config.rangeLoading ) { Object.keys( known ).forEach( function ( key ) { choices[ key ] = { label: known[ key ], count: 0 }; } ); }
 			events.forEach( function ( event ) {
 				var key = event[ attribute ];
 				if ( key ) {
 					if ( ! choices[ key ] ) { choices[ key ] = { label: event[ labelField ] || key, count: 0 }; }
+					known[ key ] = choices[ key ].label;
 					choices[ key ].count++;
 				}
 			} );
 			group.textContent = '';
 			[ '' ].concat( Object.keys( choices ).sort() ).forEach( function ( key ) {
-				var control = button( 'leagueflow-calendar__chip', key ? choices[ key ].label + ' (' + choices[ key ].count + ')' : allLabel );
+				var control = button( 'leagueflow-calendar__chip', key ? choices[ key ].label + ( config.rangeLoading ? '' : ' (' + choices[ key ].count + ')' ) : allLabel );
 				control.dataset[ attribute === 'sport' ? 'sport' : 'type' ] = key;
 				control.classList.toggle( 'is-active', selected === key );
 				control.setAttribute( 'aria-pressed', selected === key ? 'true' : 'false' );
@@ -1014,41 +1103,71 @@
 			group.hidden = Object.keys( choices ).length <= 1;
 		}
 
-		if ( pageButton && config.calendarEndpoint && pagination.nextPage ) {
-			pageButton.addEventListener( 'click', async function () {
-				if ( loadingPage || ! pagination.nextPage ) { return; }
-				loadingPage = true;
+		async function loadCalendarPage( scope, page, replace ) {
+			if ( loadingPage && ! replace ) { return; }
+			if ( pageController ) { pageController.abort(); }
+			pageController = window.AbortController ? new window.AbortController() : null;
+			var version = ++requestVersion;
+			activeScope = scope;
+			activeScopeKey = JSON.stringify( scope );
+			loadingPage = true;
+			pageError = '';
+			failedPage = null;
+			if ( replace ) { events = []; pagination = { perPage: pagination.perPage || 100, nextPage: null, total: 0 }; }
+			showPageProgress();
+			try {
+				var pageUrl = new URL( document.baseURI );
+				var endpoint = new URL( config.calendarEndpoint, pageUrl );
+				if ( endpoint.origin !== pageUrl.origin ) { throw new Error( 'Calendar endpoint must be on this site.' ); }
+				Object.keys( config.calendarFilters || {} ).forEach( function ( key ) {
+					var value = config.calendarFilters[ key ];
+					if ( value !== null && value !== '' ) { endpoint.searchParams.set( key, value === false ? '0' : String( value ) ); }
+				} );
+				Object.keys( scope ).forEach( function ( key ) {
+					// Visitor filters refine a block's published scope; they must not
+					// replace an author's fixed sport or event type.
+					var fixed = config.calendarFilters || {};
+					if ( key === 'sport' && fixed.sport || key === 'type' && fixed.event_type ) { return; }
+					if ( scope[ key ] !== '' ) { endpoint.searchParams.set( key, scope[ key ] ); }
+				} );
+				endpoint.searchParams.set( 'per_page', Math.min( 100, pagination.perPage || 100 ) );
+				endpoint.searchParams.set( 'page', page );
+				var options = { credentials: 'omit', cache: 'no-store', headers: { Accept: 'application/json' } };
+				if ( pageController ) { options.signal = pageController.signal; }
+				var response = await fetch( endpoint.toString(), options );
+				if ( ! response.ok ) { throw new Error( 'Calendar request failed.' ); }
+				var result = await response.json();
+				if ( version !== requestVersion ) { return; }
+				if ( ! Array.isArray( result.events ) || result.events.length > 100 || ! result.pagination || result.pagination.currentPage !== page ) { throw new Error( 'Invalid calendar page.' ); }
+				var nextPage = result.pagination.nextPage;
+				if ( nextPage !== null && ( ! Number.isInteger( nextPage ) || nextPage !== page + 1 || nextPage > 10000 ) ) { throw new Error( 'Invalid next page.' ); }
+				var ids = new Set( events.map( function ( event ) { return event.id; } ) );
+				events = events.concat( normalizeEvents( result.events ).filter( function ( event ) {
+					if ( ids.has( event.id ) ) { return false; }
+					ids.add( event.id ); return true;
+				} ) ).sort( function ( a, b ) { return ( 'desc' === config.eventSortOrder ? -1 : 1 ) * ( a.startDate - b.startDate || String( a.id ).localeCompare( String( b.id ) ) ); } );
+				( result.sports || [] ).forEach( function ( sport ) { sportColors[ sport.slug ] = sport.color; } );
+				pagination.nextPage = nextPage;
+				pagination.total = result.total;
+				loadingPage = false;
+				refreshLoadedFilters( '[data-calendar-sport-filters]', 'sport', 'sportLabel', strings.allSports || 'All sports', state.sport );
+				refreshLoadedFilters( '[data-calendar-type-filters]', 'kind', 'kindLabel', strings.allTypes || 'All types', state.type );
+				render();
 				showPageProgress();
-				try {
-					var endpoint = new URL( config.calendarEndpoint, window.location.href );
-					if ( endpoint.origin !== window.location.origin ) { throw new Error( 'Calendar endpoint must be on this site.' ); }
-					Object.keys( config.calendarFilters || {} ).forEach( function ( key ) {
-						var value = config.calendarFilters[ key ];
-						if ( value !== null && value !== '' ) { endpoint.searchParams.set( key, value === false ? '0' : String( value ) ); }
-					} );
-					endpoint.searchParams.set( 'per_page', Math.min( 100, pagination.perPage || 100 ) );
-					endpoint.searchParams.set( 'page', pagination.nextPage );
-					var response = await fetch( endpoint.toString(), { credentials: 'omit', headers: { Accept: 'application/json' } } );
-					if ( ! response.ok ) { throw new Error( 'Calendar request failed.' ); }
-					var result = await response.json();
-					if ( ! Array.isArray( result.events ) || result.events.length > 100 || ! result.pagination || result.pagination.currentPage !== pagination.nextPage ) { throw new Error( 'Invalid calendar page.' ); }
-					var nextPage = result.pagination.nextPage;
-					if ( nextPage !== null && ( ! Number.isInteger( nextPage ) || nextPage !== pagination.nextPage + 1 || nextPage > 10000 ) ) { throw new Error( 'Invalid next page.' ); }
-					var ids = new Set( events.map( function ( event ) { return event.id; } ) );
-					events = events.concat( normalizeEvents( result.events ).filter( function ( event ) {
-						if ( ids.has( event.id ) ) { return false; }
-						ids.add( event.id ); return true;
-					} ) ).sort( function ( a, b ) { return a.startDate - b.startDate || String( a.id ).localeCompare( String( b.id ) ); } );
-					( result.sports || [] ).forEach( function ( sport ) { sportColors[ sport.slug ] = sport.color; } );
-					pagination.nextPage = nextPage;
-					pagination.total = result.total;
-					refreshLoadedFilters( '[data-calendar-sport-filters]', 'sport', 'sportLabel', strings.allSports || 'All sports', state.sport );
-					refreshLoadedFilters( '[data-calendar-type-filters]', 'kind', 'kindLabel', strings.allTypes || 'All types', state.type );
-					render();
-					loadingPage = false; showPageProgress();
-				} catch ( error ) {
-					loadingPage = false; showPageProgress( strings.batchError || 'Could not load the next schedule page. Please retry.' );
-				}
+			} catch ( error ) {
+				if ( version !== requestVersion ) { return; }
+				loadingPage = false;
+				failedPage = { scope: scope, page: page, replace: replace };
+				pageError = config.rangeLoading ? ( strings.rangeError || 'This schedule could not be loaded. Please retry.' ) : ( strings.batchError || 'Could not load the next schedule page. Please retry.' );
+				render(); showPageProgress( pageError );
+			}
+		}
+
+		if ( pageButton && config.calendarEndpoint ) {
+			pageButton.addEventListener( 'click', function () {
+				if ( loadingPage ) { return; }
+				if ( failedPage ) { loadCalendarPage( failedPage.scope, failedPage.page, failedPage.replace ); }
+				else if ( pagination.nextPage ) { loadCalendarPage( activeScope, pagination.nextPage, false ); }
 			} );
 			showPageProgress();
 		}
@@ -1094,12 +1213,15 @@
 			render();
 		} );
 
+		var searchTimer = null;
+		if ( panelClose ) { panelClose.addEventListener( 'click', function () { var day = state.selectedDay; state.selectedDay = null; state.fullMonth = true; render(); var control = root.querySelector( '[data-day="' + day + '"]' ); if ( control ) { control.focus(); } } ); }
+		if ( jumpInput ) { jumpInput.addEventListener( 'change', function () { if ( /^\d{4}-\d{2}-\d{2}$/.test( this.value ) ) { state.date = parseDay( this.value ); state.selectedDay = 'day' === state.view ? this.value : null; state.fullMonth = false; render(); } } ); }
 		if ( searchInput ) {
 			searchInput.addEventListener( 'input', function () {
-				state.search = this.value || '';
-				state.selectedDay = null;
-				state.listCount = listInitial;
-				render();
+				var value = this.value || '';
+				window.clearTimeout( searchTimer );
+				var applySearch = function () { state.search = value; state.selectedDay = null; state.listCount = listInitial; render(); };
+				if ( config.rangeLoading ) { searchTimer = window.setTimeout( applySearch, 250 ); } else { applySearch(); }
 			} );
 		}
 
@@ -1109,6 +1231,12 @@
 			} );
 		}
 
+		var observedWidth = 0;
+		var resizeObserver = window.ResizeObserver ? new window.ResizeObserver( function ( entries ) {
+			var width = Math.round( entries[0].contentRect.width );
+			if ( width !== observedWidth ) { observedWidth = width; render(); }
+		} ) : null;
+		if ( resizeObserver ) { resizeObserver.observe( root ); }
 		if ( mobileQuery ) {
 			if ( mobileQuery.addEventListener ) {
 				mobileQuery.addEventListener( 'change', render );
@@ -1117,8 +1245,9 @@
 			}
 		}
 
-		document.addEventListener( 'keydown', function ( event ) {
+		function onKeydown( event ) {
 			if ( 'Escape' === event.key ) {
+				if ( ( ! dialog || dialog.hidden ) && panelClose && ! panelClose.hidden && root.contains( document.activeElement ) ) { panelClose.click(); }
 				closeDialog();
 				return;
 			}
@@ -1126,7 +1255,16 @@
 			if ( 'Tab' === event.key && dialog && ! dialog.hidden ) {
 				trapDialogFocus( event );
 			}
-		} );
+		}
+		document.addEventListener( 'keydown', onKeydown );
+		root.leagueflowCalendarCleanup = function () {
+			document.removeEventListener( 'keydown', onKeydown );
+			if ( resizeObserver ) { resizeObserver.disconnect(); }
+			if ( mobileQuery && mobileQuery.removeEventListener ) { mobileQuery.removeEventListener( 'change', render ); }
+			else if ( mobileQuery && mobileQuery.removeListener ) { mobileQuery.removeListener( render ); }
+			if ( pageController ) { pageController.abort(); }
+			window.clearTimeout( searchTimer ); ++requestVersion; closeDialog(); delete root.dataset.calendarInitialized;
+		};
 
 		function trapDialogFocus( event ) {
 			var card = dialog.querySelector( '[role="dialog"]' ) || dialog;
@@ -1172,6 +1310,7 @@
 		}
 	}
 
+	window.LeagueFlowCalendar = { init: init, destroy: function ( root ) { if ( root.leagueflowCalendarCleanup ) { root.leagueflowCalendarCleanup(); } } };
 	onReady( function () {
 		document.querySelectorAll( '[data-leagueflow-calendar]' ).forEach( init );
 	} );

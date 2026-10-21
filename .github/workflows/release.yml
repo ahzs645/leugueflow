@@ -50,8 +50,8 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
-      - name: Calendar timezone, date label and keyboard regressions
-        run: npm run test:calendar
+      - name: Calendar range, timezone, layout, keyboard and registration regressions
+        run: npm test
 
   package:
     runs-on: ubuntu-24.04
@@ -121,6 +121,12 @@ jobs:
           wp eval-file "$GITHUB_WORKSPACE/tests/wordpress-portal.php" --path="$wp_root"
           wp eval-file "$GITHUB_WORKSPACE/tests/wordpress-portal-http.php" --path="$wp_root"
           wp eval-file "$GITHUB_WORKSPACE/tests/wordpress-admin.php" --path="$wp_root"
+          wp eval-file "$GITHUB_WORKSPACE/tests/wordpress-standings.php" --path="$wp_root"
+          wp eval-file "$GITHUB_WORKSPACE/tests/wordpress-scheduling.php" --path="$wp_root"
+          wp eval-file "$GITHUB_WORKSPACE/tests/wordpress-calendar.php" --path="$wp_root"
+          wp eval-file "$GITHUB_WORKSPACE/tests/wordpress-registration.php" --path="$wp_root"
+          wp eval-file "$GITHUB_WORKSPACE/tests/wordpress-rest-identity.php" --path="$wp_root"
+          wp eval-file "$GITHUB_WORKSPACE/tests/wordpress-referee.php" --path="$wp_root"
           wp eval-file "$GITHUB_WORKSPACE/tests/wordpress-public-api.php" --path="$wp_root"
           wp eval-file "$GITHUB_WORKSPACE/tests/wordpress-update.php" --path="$wp_root"
 

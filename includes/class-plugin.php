@@ -65,6 +65,9 @@ class Plugin {
 		$fixtures     = new Fixture_Generator( $fields );
 		$match_status = new Match_Status();
 		$availability = new Availability();
+		$consent      = new Registration_Consent();
+		$referees     = new Referee();
+		$guide        = new Admin_Guide();
 
 		$this->renderer = new Renderer( $standings, $knockout, $sports );
 
@@ -89,6 +92,9 @@ class Plugin {
 			$fields,
 			$match_status,
 			$availability,
+			$consent,
+			$referees,
+			$guide,
 			$requests,
 			$admin,
 			$portal,

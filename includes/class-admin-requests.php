@@ -49,6 +49,7 @@ class Admin_Requests {
 	 */
 	public function register() {
 		add_action( 'admin_post_leagueflow_request_action', array( $this, 'handle_action' ) );
+		add_action( 'admin_post_leagueflow_reconcile_requests', array( $this, 'handle_reconcile' ) );
 		add_action( 'add_meta_boxes_lf_join_request', array( $this, 'register_record_meta_box' ) );
 	}
 
@@ -302,6 +303,8 @@ class Admin_Requests {
 				<?php submit_button( __( 'Filter', 'leagueflow' ), 'secondary', '', false ); ?>
 			</form>
 
+			<?php $this->render_reconcile_form( $rows ); ?>
+
 			<?php if ( empty( $rows ) ) : ?>
 				<div class="leagueflow-empty-state">
 					<p><strong><?php esc_html_e( 'No requests match these filters.', 'leagueflow' ); ?></strong></p>
@@ -351,6 +354,56 @@ class Admin_Requests {
 			<p class="description"><a href="<?php echo esc_url( admin_url( 'edit.php?post_type=lf_join_request' ) ); ?>"><?php esc_html_e( 'Raw request records (classic list)', 'leagueflow' ); ?></a></p>
 		</div>
 		<?php
+	}
+
+	/** Preview only the already-placed requests on this page; preserve their history. */
+	protected function render_reconcile_form( $rows ) {
+		$ready = array_filter( $rows, function ( $info ) {
+			return $this->service->current_user_can_review( $info['id'] ) && in_array( 'resolve_member', $this->service->available_actions( $info ), true );
+		} );
+		if ( ! $ready ) { return; }
+		?>
+		<details class="leagueflow-request-reconcile">
+			<summary><?php echo esc_html( sprintf( __( 'Review %d already-placed requests on this page', 'leagueflow' ), count( $ready ) ) ); ?></summary>
+			<p><?php esc_html_e( 'These exact player records already belong to a team matching their request. Close the pending requests below as approved; roster memberships and request history are kept.', 'leagueflow' ); ?></p>
+			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+				<input type="hidden" name="action" value="leagueflow_reconcile_requests" />
+				<input type="hidden" name="lf_return" value="<?php echo esc_attr( $this->url() ); ?>" />
+				<?php wp_nonce_field( 'leagueflow_reconcile_requests', 'leagueflow_reconcile_nonce' ); ?>
+				<ul>
+				<?php foreach ( $ready as $info ) : ?>
+					<li><?php echo esc_html( $this->player_label( $info ) . ' — ' . $this->summary( $info ) ); ?>
+					<input type="hidden" name="lf_request_states[<?php echo esc_attr( (string) $info['id'] ); ?>]" value="<?php echo esc_attr( $this->service->state_token( $info ) ); ?>" /></li>
+				<?php endforeach; ?>
+				</ul>
+				<button class="button button-secondary" type="submit"><?php esc_html_e( 'Close these already-placed requests', 'leagueflow' ); ?></button>
+			</form>
+		</details>
+		<?php
+	}
+
+	/** Apply the bounded preview through the same locked state-aware single-request path. */
+	public function handle_reconcile() {
+		if ( ! $this->service->current_user_can_review() ) {
+			wp_die( esc_html__( 'You do not have permission to review requests.', 'leagueflow' ), '', array( 'response' => 403 ) );
+		}
+		$return = $this->safe_return_url( 0 );
+		$nonce = isset( $_POST['leagueflow_reconcile_nonce'] ) && is_string( $_POST['leagueflow_reconcile_nonce'] ) ? sanitize_text_field( wp_unslash( $_POST['leagueflow_reconcile_nonce'] ) ) : '';
+		$states = isset( $_POST['lf_request_states'] ) && is_array( $_POST['lf_request_states'] ) ? wp_unslash( $_POST['lf_request_states'] ) : array();
+		if ( ! wp_verify_nonce( $nonce, 'leagueflow_reconcile_requests' ) || ! $states || count( $states ) > self::PER_PAGE ) {
+			$this->redirect( $return, array( 'leagueflow_request_notice' => 'invalid' ) );
+		}
+		foreach ( $states as $id => $state ) {
+			if ( ! ctype_digit( (string) $id ) || ! absint( $id ) || ! is_string( $state ) || ! preg_match( '/^[a-f0-9]{16}$/', $state ) ) {
+				$this->redirect( $return, array( 'leagueflow_request_notice' => 'invalid' ) );
+			}
+		}
+		$closed = 0;
+		foreach ( $states as $id => $state ) {
+			$result = $this->service->apply_action( (int) $id, 'resolve_member', array( 'state' => $state ) );
+			if ( ! is_wp_error( $result ) ) { ++$closed; }
+		}
+		$this->redirect( $return, array( 'leagueflow_request_notice' => 'reconciled', 'lf_closed' => $closed, 'lf_skipped' => count( $states ) - $closed ) );
 	}
 
 	/**
@@ -691,6 +744,12 @@ class Admin_Requests {
 	 */
 	protected function render_notice() {
 		$code     = sanitize_key( wp_unslash( $_GET['leagueflow_request_notice'] ?? $_GET['leagueflow_placement_notice'] ?? '' ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		if ( 'reconciled' === $code ) {
+			$closed = min( self::PER_PAGE, absint( $_GET['lf_closed'] ?? 0 ) );
+			$skipped = min( self::PER_PAGE, absint( $_GET['lf_skipped'] ?? 0 ) );
+			printf( '<div class="notice notice-info inline" role="status"><p>%s</p></div>', esc_html( sprintf( __( '%1$d already-placed requests closed. %2$d changed or unavailable requests were skipped; review them again. No players were removed.', 'leagueflow' ), $closed, $skipped ) ) );
+			return;
+		}
 		$messages = array(
 			'done'     => array( 'success', __( 'The request was updated.', 'leagueflow' ) ),
 			'assigned' => array( 'success', __( 'The player was added to the team.', 'leagueflow' ) ),

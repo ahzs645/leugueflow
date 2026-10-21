@@ -350,7 +350,29 @@ class Rest_Controller {
 	 * @return \WP_REST_Response
 	 */
 	public function get_calendar_events( WP_REST_Request $request ) {
+		foreach ( array( 'competition' => 'lf_competition', 'season' => 'lf_season', 'sport' => 'lf_sport', 'league_level' => 'lf_league_level' ) as $key => $taxonomy ) {
+			$value = $request->get_param( $key );
+			if ( null === $value || '' === $value || 0 === $value || '0' === $value ) { continue; }
+			$id = is_scalar( $value ) ? resolve_term_id( $value, $taxonomy ) : 0;
+			if ( ! $id || ! term_exists( $id, $taxonomy ) ) {
+				return new WP_Error( 'leagueflow_calendar_filter', sprintf( __( 'Unknown calendar filter: %s.', 'leagueflow' ), $key ), array( 'status' => 400 ) );
+			}
+		}
+		$team = $request->get_param( 'team' );
+		if ( null !== $team && '' !== $team && '0' !== (string) ( is_scalar( $team ) ? $team : '' ) ) {
+			$id = is_scalar( $team ) ? resolve_post_id( $team, 'lf_team' ) : 0;
+			if ( ! $id || 'lf_team' !== get_post_type( $id ) ) { return new WP_Error( 'leagueflow_calendar_team', __( 'Unknown calendar team.', 'leagueflow' ), array( 'status' => 400 ) ); }
+		}
+		foreach ( array( 'date', 'start_date', 'end_date' ) as $date_key ) {
+			$value = $request->get_param( $date_key );
+			if ( null !== $value && '' !== $value && ! public_collection_date( $value ) ) {
+				return new WP_Error( 'leagueflow_calendar_date', __( 'Calendar dates must be real dates in YYYY-MM-DD format.', 'leagueflow' ), array( 'status' => 400 ) );
+			}
+		}
 		$range    = $this->get_date_range_from_request( $request );
+		if ( $range['start_date'] && $range['end_date'] && $range['start_date'] > $range['end_date'] ) {
+			return new WP_Error( 'leagueflow_calendar_range', __( 'The end date must be on or after the start date.', 'leagueflow' ), array( 'status' => 400 ) );
+		}
 		$per_page = public_collection_limit( $request->get_param( 'per_page' ) );
 		$page     = public_collection_page( $request->get_param( 'page' ) );
 		$type     = $request->get_param( 'type' );
@@ -384,6 +406,8 @@ class Rest_Controller {
 				'end_date'         => $range['end_date'],
 				'limit'            => $per_page,
 				'page'             => $page,
+				'order'            => 'desc' === $request->get_param( 'order' ) ? 'desc' : 'asc',
+				'public_only'      => rest_sanitize_boolean( $request->get_param( 'public_only' ) ),
 			)
 		);
 
@@ -403,7 +427,7 @@ class Rest_Controller {
 
 		$filters = $this->build_calendar_filter_metadata( $items, $colors );
 
-		return rest_ensure_response(
+		$response = rest_ensure_response(
 			array(
 				'events'        => $events,
 				'eventMetadata' => $metadata,
@@ -430,6 +454,10 @@ class Rest_Controller {
 				),
 			)
 		);
+		$response->header( 'Cache-Control', 'no-store' );
+		$response->header( 'X-WP-Total', $total );
+		$response->header( 'X-WP-TotalPages', $pages );
+		return $response;
 	}
 
 	/**
@@ -946,7 +974,7 @@ class Rest_Controller {
 	protected function sanitize_date_param( $date ) {
 		$date = is_scalar( $date ) ? (string) $date : '';
 
-		return preg_match( '/^\d{4}-\d{2}-\d{2}$/', $date ) ? $date : '';
+		return public_collection_date( $date );
 	}
 
 	/**

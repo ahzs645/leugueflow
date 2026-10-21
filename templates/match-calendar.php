@@ -11,10 +11,14 @@
  */
 
 defined( 'ABSPATH' ) || exit;
+$calendar_id = wp_unique_id( 'leagueflow-calendar-' );
+$wrapper_attributes = 'leagueflow/match-calendar' === ( \WP_Block_Supports::$block_to_render['blockName'] ?? '' )
+	? get_block_wrapper_attributes( array( 'class' => 'leagueflow leagueflow-calendar', 'id' => $calendar_id ) )
+	: 'class="leagueflow leagueflow-calendar" id="' . esc_attr( $calendar_id ) . '"';
 ?>
-<div class="leagueflow leagueflow-calendar" data-leagueflow-calendar>
+<div <?php echo $wrapper_attributes; ?> data-leagueflow-calendar>
 	<div class="leagueflow-calendar__toolbar">
-		<div class="leagueflow-calendar__view-tabs" role="tablist" aria-label="<?php esc_attr_e( 'Calendar view', 'leagueflow' ); ?>">
+		<div class="leagueflow-calendar__view-tabs" role="group" aria-label="<?php esc_attr_e( 'Calendar view', 'leagueflow' ); ?>">
 			<button type="button" class="leagueflow-calendar__view is-active" data-calendar-view="month" aria-pressed="true"><?php esc_html_e( 'Month', 'leagueflow' ); ?></button>
 			<button type="button" class="leagueflow-calendar__view" data-calendar-view="list" aria-pressed="false"><?php esc_html_e( 'List', 'leagueflow' ); ?></button>
 			<?php if ( ! empty( $payload['config']['showWeek'] ) ) : ?>
@@ -41,7 +45,6 @@ defined( 'ABSPATH' ) || exit;
 					<button type="button" class="leagueflow-calendar__chip" data-sport="<?php echo esc_attr( $sport['slug'] ); ?>" aria-pressed="false" style="--lf-cal-accent: <?php echo esc_attr( $sport['color'] ); ?>;">
 						<span class="leagueflow-calendar__chip-dot" aria-hidden="true"></span>
 						<?php echo esc_html( $sport['label'] ); ?>
-						<span class="leagueflow-calendar__chip-count"><?php echo esc_html( (string) $sport['count'] ); ?></span>
 					</button>
 				<?php endforeach; ?>
 			</div>
@@ -54,7 +57,6 @@ defined( 'ABSPATH' ) || exit;
 				<?php foreach ( $types as $type ) : ?>
 					<button type="button" class="leagueflow-calendar__chip" data-type="<?php echo esc_attr( $type['slug'] ); ?>" aria-pressed="false">
 						<?php echo esc_html( $type['label'] ); ?>
-						<span class="leagueflow-calendar__chip-count"><?php echo esc_html( (string) $type['count'] ); ?></span>
 					</button>
 				<?php endforeach; ?>
 			</div>
@@ -65,6 +67,7 @@ defined( 'ABSPATH' ) || exit;
 			<header class="leagueflow-calendar__header">
 				<h3 class="leagueflow-calendar__month" data-calendar-range-label>&nbsp;</h3>
 				<div class="leagueflow-calendar__nav">
+					<label class="leagueflow-calendar__jump"><span class="screen-reader-text"><?php esc_html_e( 'Jump to date', 'leagueflow' ); ?></span><input type="date" data-calendar-jump aria-label="<?php esc_attr_e( 'Jump to date', 'leagueflow' ); ?>" value="<?php echo esc_attr( $payload['config']['today'] ); ?>" /></label>
 					<button type="button" class="leagueflow-calendar__nav-btn" data-calendar-today><?php esc_html_e( 'Today', 'leagueflow' ); ?></button>
 					<button type="button" class="leagueflow-calendar__nav-btn" data-calendar-prev aria-label="<?php esc_attr_e( 'Previous', 'leagueflow' ); ?>">&lsaquo;</button>
 					<button type="button" class="leagueflow-calendar__nav-btn" data-calendar-next aria-label="<?php esc_attr_e( 'Next', 'leagueflow' ); ?>">&rsaquo;</button>
@@ -74,8 +77,9 @@ defined( 'ABSPATH' ) || exit;
 		</section>
 		<aside class="leagueflow-calendar__panel" data-calendar-panel>
 			<div class="leagueflow-calendar__panel-head">
-				<h3 class="leagueflow-calendar__panel-title" data-calendar-panel-title>&nbsp;</h3>
+				<h3 class="leagueflow-calendar__panel-title" id="<?php echo esc_attr( $calendar_id . '-panel-title' ); ?>" data-calendar-panel-title>&nbsp;</h3>
 				<button type="button" class="leagueflow-calendar__panel-clear" data-calendar-clear hidden><?php esc_html_e( 'Show full month', 'leagueflow' ); ?></button>
+				<button type="button" class="leagueflow-calendar__panel-clear" data-calendar-panel-close hidden><?php esc_html_e( 'Close day', 'leagueflow' ); ?></button>
 			</div>
 			<div class="leagueflow-calendar__events" data-calendar-events aria-live="polite"></div>
 		</aside>
@@ -88,7 +92,7 @@ defined( 'ABSPATH' ) || exit;
 
 	<div class="leagueflow-calendar__dialog" data-calendar-dialog hidden>
 		<div class="leagueflow-calendar__dialog-backdrop" data-calendar-dialog-close></div>
-		<article class="leagueflow-calendar__dialog-card" role="dialog" aria-modal="true" aria-labelledby="leagueflow-calendar-dialog-title">
+		<article class="leagueflow-calendar__dialog-card" role="dialog" aria-modal="true" aria-labelledby="<?php echo esc_attr( $calendar_id . '-dialog-title' ); ?>">
 			<button type="button" class="leagueflow-calendar__dialog-close" data-calendar-dialog-close aria-label="<?php esc_attr_e( 'Close', 'leagueflow' ); ?>">&times;</button>
 			<div data-calendar-dialog-content></div>
 		</article>
@@ -96,7 +100,7 @@ defined( 'ABSPATH' ) || exit;
 
 	<noscript>
 		<div class="leagueflow-calendar__fallback">
-			<p><?php esc_html_e( 'The interactive calendar needs JavaScript. Here is the first schedule page (up to 100 events):', 'leagueflow' ); ?></p>
+			<p><?php esc_html_e( 'The interactive calendar needs JavaScript. The first page of the initial date range is listed below. Enable JavaScript to change dates, filter, and load additional events.', 'leagueflow' ); ?></p>
 			<div class="leagueflow-match-stack">
 				<?php foreach ( $items as $item ) : ?>
 					<article class="leagueflow-match-row">
@@ -128,5 +132,5 @@ defined( 'ABSPATH' ) || exit;
 		</div>
 	</noscript>
 
-	<script type="application/json" data-calendar-data><?php echo wp_json_encode( $payload ); ?></script>
+	<script type="application/json" data-calendar-data><?php echo wp_json_encode( $payload, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT ); ?></script>
 </div>

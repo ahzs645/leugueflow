@@ -1,0 +1,13 @@
+.leagueflow-referee { max-width: 68rem; margin: 1rem auto; line-height: 1.5; }
+.leagueflow-referee__table { overflow-x: auto; margin-block: 1rem 2rem; }
+.leagueflow-referee table { width: 100%; border-collapse: collapse; text-align: left; }
+.leagueflow-referee th, .leagueflow-referee td { padding: .65rem .8rem; border-bottom: 1px solid #ccd0d4; }
+.leagueflow-referee thead { background: #f0f3f5; color: #17232c; }
+.leagueflow-referee__matches { padding: 0; list-style: none; }
+.leagueflow-referee__matches li { display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; padding: 1rem 0; border-bottom: 1px solid #ccd0d4; }
+.leagueflow-referee__matches a { flex: 1 1 20rem; font-weight: 600; }
+.leagueflow-referee form label[for] { display: block; font-weight: 600; margin-bottom: .25rem; }
+.leagueflow-referee input[type="number"] { width: 7rem; padding: .5rem; }
+.leagueflow-referee button { min-height: 2.75rem; padding: .65rem 1rem; cursor: pointer; }
+.leagueflow-referee__notice { padding: 1rem; border-left: 4px solid #24694c; background: #eef7f1; color: #123528; }
+.leagueflow-referee a:focus-visible, .leagueflow-referee input:focus-visible, .leagueflow-referee button:focus-visible { outline: 3px solid #2271b1; outline-offset: 2px; }

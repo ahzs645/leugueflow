@@ -333,13 +333,13 @@ class Renderer {
 	}
 
 	/** Match references must be eligible before a page or total is selected. */
-	protected function match_visibility_sql( $team_id = 0 ) {
+	protected function match_visibility_sql( $team_id = 0, $public_only = false ) {
 		global $wpdb;
-		$staff = current_user_can( 'edit_posts' );
+		$staff = ! $public_only && current_user_can( 'edit_posts' );
 		if ( $staff ) {
 			$visible = $this->post_visibility_sql( 'lf_visible_team', 'lf_team' );
 		} else {
-			$unlocked = $team_id && 'lf_team' === get_post_type( $team_id ) && can_view_league_post( $team_id ) && ! post_password_required( $team_id );
+			$unlocked = ! $public_only && $team_id && 'lf_team' === get_post_type( $team_id ) && can_view_league_post( $team_id ) && ! post_password_required( $team_id );
 			$password = "lf_visible_team.post_password = ''";
 			if ( $unlocked ) { $password .= $wpdb->prepare( ' OR lf_visible_team.ID = %d', $team_id ); }
 			$visible = "lf_visible_team.post_status = 'publish' AND ($password)";
@@ -390,6 +390,10 @@ class Renderer {
 				'list_initial'     => 30,
 				'list_more'        => 15,
 				'limit'            => 100,
+				'show_cost'        => '1',
+				'event_sort_order' => 'asc',
+				'month_display'    => 'sidebar',
+				'sidebar_position' => 'right',
 			),
 			$atts,
 			'match_calendar'
@@ -423,12 +427,40 @@ class Renderer {
 				'include_events'   => $include_events,
 				'event_type'       => $atts['event_type'],
 				'limit'            => public_collection_limit( $atts['limit'] ),
+				'order'            => 'desc' === $atts['event_sort_order'] ? 'desc' : 'asc',
+				'public_only'      => true,
 			);
-		$calendar_page = $this->get_calendar_page( $calendar_filters );
+		// A calendar range must not depend on its position in the complete history.
+		// Query the visible range first; JavaScript requests a fresh bounded page
+		// whenever the visitor moves to another month, week, day or list.
+		$today = current_datetime();
+		$calendar_range = array( 'start_date' => $today->format( 'Y-m-01' ), 'end_date' => $today->format( 'Y-m-t' ) );
+		if ( 'week' === $initial_view ) {
+			$offset = ( (int) $today->format( 'w' ) - (int) get_option( 'start_of_week', 1 ) + 7 ) % 7;
+			$start = $today->modify( '-' . $offset . ' days' );
+			$calendar_range = array( 'start_date' => $start->format( 'Y-m-d' ), 'end_date' => $start->modify( '+6 days' )->format( 'Y-m-d' ) );
+		} elseif ( 'day' === $initial_view || 'list' === $initial_view ) {
+			$calendar_range = array( 'start_date' => $today->format( 'Y-m-d' ), 'end_date' => 'day' === $initial_view ? $today->format( 'Y-m-d' ) : '' );
+		}
+		$calendar_page = $this->get_calendar_page( array_merge( $calendar_filters, $calendar_range ) );
 		$events = $calendar_page['items'];
 
 		$sport_data = $this->build_calendar_sport_data( $events );
 		$type_data  = $this->build_calendar_type_data( $events );
+		// Filters must remain selectable even when their first item is on a later page.
+		$fixed_sport_id = $atts['sport'] ? resolve_term_id( $atts['sport'], 'lf_sport' ) : 0;
+		$fixed_sport = $fixed_sport_id ? get_term( $fixed_sport_id, 'lf_sport' ) : null;
+		foreach ( $this->sports_manager->get_enabled_sports() as $slug => $definition ) {
+			if ( $atts['sport'] && ( ! $fixed_sport || is_wp_error( $fixed_sport ) || $slug !== $fixed_sport->slug ) ) { continue; }
+			if ( ! isset( $sport_data[ $slug ] ) ) {
+				$sport_data[ $slug ] = array( 'slug' => $slug, 'label' => $definition['label'], 'count' => 0 );
+			}
+		}
+		$available_types = array_merge( array( 'match' => __( 'Match', 'leagueflow' ) ), $include_events && ! $atts['team'] ? $this->calendar_event_type_labels : array() );
+		if ( $atts['event_type'] ) { $available_types = isset( $available_types[ $atts['event_type'] ] ) ? array( $atts['event_type'] => $available_types[ $atts['event_type'] ] ) : array(); }
+		foreach ( $available_types as $slug => $label ) {
+			if ( ! isset( $type_data[ $slug ] ) ) { $type_data[ $slug ] = array( 'slug' => $slug, 'label' => $label, 'count' => 0 ); }
+		}
 
 		$colors = apply_filters(
 			'leagueflow_calendar_sport_colors',
@@ -494,6 +526,8 @@ class Renderer {
 			'types'  => $types,
 			'config' => array(
 				'calendarEndpoint' => rest_url( 'leagueflow/v1/calendar/events' ),
+				'rangeLoading' => true,
+				'calendarRange' => $calendar_range,
 				'calendarFilters' => array_diff_key( $calendar_filters, array( 'limit' => true ) ),
 				'startOfWeek'   => (int) get_option( 'start_of_week', 1 ),
 				'today'         => wp_date( 'Y-m-d' ),
@@ -505,6 +539,10 @@ class Renderer {
 				'showDay'       => $show_day,
 				'listInitial'   => max( 1, (int) $atts['list_initial'] ),
 				'listMore'      => max( 1, (int) $atts['list_more'] ),
+				'showCost'      => $this->truthy_shortcode_value( $atts['show_cost'] ),
+				'eventSortOrder' => $calendar_filters['order'],
+				'monthDisplay'  => in_array( $atts['month_display'], array( 'sidebar', 'dropdown', 'popover' ), true ) ? $atts['month_display'] : 'sidebar',
+				'sidebarPosition' => 'left' === $atts['sidebar_position'] ? 'left' : 'right',
 			),
 			'strings' => array(
 				'allSports'      => __( 'All sports', 'leagueflow' ),
@@ -532,12 +570,19 @@ class Renderer {
 				'next'           => __( 'Next', 'leagueflow' ),
 				'batchProgress'  => __( '%1$d of %2$d scheduled events loaded.', 'leagueflow' ),
 				'batchError'     => __( 'Could not load the next schedule page. Please retry.', 'leagueflow' ),
+				'rangeLoading'   => __( 'Loading this schedule…', 'leagueflow' ),
+				'rangeError'     => __( 'This schedule could not be loaded. Please retry.', 'leagueflow' ),
+				'rangePartial'   => __( 'More events exist in this range. Load the next page to see them.', 'leagueflow' ),
+				'retry'          => __( 'Retry loading schedule', 'leagueflow' ),
+				'loadPage'       => __( 'Load next schedule page', 'leagueflow' ),
 				'loadMore'       => __( 'Load more events', 'leagueflow' ),
 				'registration'   => __( 'Registration required', 'leagueflow' ),
 				'register'       => __( 'Register', 'leagueflow' ),
 				'cost'           => __( 'Cost', 'leagueflow' ),
 				'level'          => __( 'Level', 'leagueflow' ),
 				'addGoogle'      => __( 'Add to Google Calendar', 'leagueflow' ),
+				'addOutlook'     => __( 'Add to Outlook', 'leagueflow' ),
+				'continues'      => __( 'Continues', 'leagueflow' ),
 				'addApple'       => __( 'Add to your Apple Calendar', 'leagueflow' ),
 				'downloadIcs'    => __( 'Add to your Apple Calendar', 'leagueflow' ),
 				'close'          => __( 'Close', 'leagueflow' ),
@@ -579,24 +624,26 @@ class Renderer {
 			'competition' => '', 'season' => '', 'sport' => '', 'league_level' => '', 'team' => '',
 			'include_knockout' => null, 'include_events' => true, 'event_type' => '', 'type' => '', 'kind' => '',
 			'status' => '', 'match_status' => '', 'event_status' => '', 'source' => '', 'search' => '',
-			'start_date' => '', 'end_date' => '', 'limit' => 20, 'page' => 1, 'post_id' => 0,
+			'start_date' => '', 'end_date' => '', 'limit' => 20, 'page' => 1, 'post_id' => 0, 'order' => 'asc', 'public_only' => false,
 		) );
 		$limit = public_collection_limit( $filters['limit'] );
 		$page = public_collection_page( $filters['page'] );
 		$source = sanitize_key( (string) $filters['source'] );
-		$kind = sanitize_key( (string) ( $filters['type'] ?: $filters['kind'] ) );
+		$kind = sanitize_key( (string) ( $filters['type'] ?: ( $filters['kind'] ?: $filters['event_type'] ) ) );
 		$team = is_numeric( $filters['team'] ) ? absint( $filters['team'] ) : resolve_post_id( $filters['team'], 'lf_team' );
+		if ( ! empty( $filters['team'] ) && ( ! $team || 'lf_team' !== get_post_type( $team ) ) ) { return array( 'items' => array(), 'total' => 0, 'pages' => 0 ); }
 		$include_events = is_bool( $filters['include_events'] ) ? $filters['include_events'] : $this->truthy_shortcode_value( $filters['include_events'] );
 		$types = array();
 		if ( 'event' !== $source && ( ! $kind || 'match' === $kind ) ) { $types[] = 'lf_match'; }
 		if ( 'match' !== $source && $include_events && ! $team && 'match' !== $kind ) { $types[] = 'lf_calendar_event'; }
 		if ( ! $types ) { return array( 'items' => array(), 'total' => 0, 'pages' => 0 ); }
-		$args = array( 'post_type' => $types, 'post_status' => frontend_post_statuses(), 'has_password' => false,
+		$args = array( 'post_type' => $types, 'post_status' => $filters['public_only'] ? 'publish' : frontend_post_statuses(), 'has_password' => false,
 			'posts_per_page' => $limit, 'paged' => $page, 'ignore_sticky_posts' => true, 'suppress_filters' => false,
-			'orderby' => 'none', 'leagueflow_calendar' => true );
+			'orderby' => 'none', 'leagueflow_calendar' => true, 'cache_results' => false );
 		if ( $filters['post_id'] ) { $args['post__in'] = array( absint( $filters['post_id'] ) ); }
 		foreach ( array( 'competition' => 'lf_competition', 'season' => 'lf_season', 'sport' => 'lf_sport', 'league_level' => 'lf_league_level' ) as $key => $taxonomy ) {
 			$id = is_numeric( $filters[$key] ) ? absint( $filters[$key] ) : resolve_term_id( $filters[$key], $taxonomy );
+			if ( ! empty( $filters[$key] ) && ( ! $id || ! term_exists( $id, $taxonomy ) ) ) { return array( 'items' => array(), 'total' => 0, 'pages' => 0 ); }
 			if ( $id ) { $args['tax_query'][] = array( 'taxonomy' => $taxonomy, 'field' => 'term_id', 'terms' => array( $id ) ); }
 		}
 		$search = trim( wp_strip_all_tags( (string) $filters['search'] ) );
@@ -605,18 +652,32 @@ class Renderer {
 			if ( $search && false !== stripos( $label, $search ) ) { $search_kinds[] = $slug; }
 		}
 		$query = new \WP_Query();
-		$match_visibility = $this->match_visibility_sql( $team );
-		$match_post_visibility = $this->post_visibility_sql( $wpdb->posts, 'lf_match' );
-		$event_post_visibility = $this->post_visibility_sql( $wpdb->posts, 'lf_calendar_event' );
-		$clauses_filter = static function( $clauses, $candidate ) use ( $query, $wpdb, $filters, $team, $kind, $search, $search_kinds, $match_visibility, $match_post_visibility, $event_post_visibility ) {
+		$match_visibility = $this->match_visibility_sql( $team, $filters['public_only'] );
+		$match_post_visibility = $filters['public_only'] ? "$wpdb->posts.post_status = 'publish' AND $wpdb->posts.post_password = ''" : $this->post_visibility_sql( $wpdb->posts, 'lf_match' );
+		$event_post_visibility = $filters['public_only'] ? $match_post_visibility : $this->post_visibility_sql( $wpdb->posts, 'lf_calendar_event' );
+		$duration_value = "(SELECT lf_duration.meta_value FROM $wpdb->postmeta AS lf_duration WHERE lf_duration.post_id = $wpdb->posts.ID AND lf_duration.meta_key = 'lf_duration_minutes' ORDER BY lf_duration.meta_id LIMIT 1)";
+		$legacy_cases = array();
+		foreach ( ( new Field_Availability_Manager() )->get_availabilities() as $availability ) {
+			$legacy_cases[] = $wpdb->prepare( 'WHEN %s THEN %d', $availability['id'], max( 1, (int) $availability['slot_minutes'] ) );
+		}
+		$legacy_duration = $legacy_cases ? "CASE (SELECT lf_rule.meta_value FROM $wpdb->postmeta AS lf_rule WHERE lf_rule.post_id = $wpdb->posts.ID AND lf_rule.meta_key = 'lf_field_availability_id' ORDER BY lf_rule.meta_id LIMIT 1) " . implode( ' ', $legacy_cases ) . ' ELSE 60 END' : '60';
+		$match_duration = "CASE WHEN $duration_value REGEXP '^[0-9]+$' AND CAST($duration_value AS UNSIGNED) > 0 AND CAST($duration_value AS UNSIGNED) <= " . (int) ( PHP_INT_MAX / MINUTE_IN_SECONDS ) . " THEN CAST($duration_value AS UNSIGNED) ELSE $legacy_duration END";
+		$clauses_filter = static function( $clauses, $candidate ) use ( $query, $wpdb, $filters, $team, $kind, $search, $search_kinds, $match_visibility, $match_post_visibility, $event_post_visibility, $match_duration ) {
 			if ( $candidate !== $query ) { return $clauses; }
 			$posts = $wpdb->posts;
 			$meta = $wpdb->postmeta;
-			$clauses['join'] .= " INNER JOIN $meta AS lf_calendar_date ON ($posts.ID = lf_calendar_date.post_id AND lf_calendar_date.meta_key = CASE $posts.post_type WHEN 'lf_match' THEN 'lf_match_datetime' ELSE 'lf_event_start_datetime' END)";
-			$clauses['where'] .= " AND lf_calendar_date.meta_value <> ''";
+			$clauses['join'] .= " INNER JOIN $meta AS lf_calendar_date ON ($posts.ID = lf_calendar_date.post_id AND lf_calendar_date.meta_key = CASE $posts.post_type WHEN 'lf_match' THEN 'lf_match_datetime' ELSE 'lf_event_start_datetime' END AND lf_calendar_date.meta_id = (SELECT MIN(lf_calendar_first.meta_id) FROM $meta AS lf_calendar_first WHERE lf_calendar_first.post_id = $posts.ID AND lf_calendar_first.meta_key = lf_calendar_date.meta_key))";
+			$date = 'lf_calendar_date.meta_value';
+			$clauses['where'] .= " AND $date REGEXP '^[1-9][0-9]{3}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01]) ([01][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$'";
+			$clauses['where'] .= " AND CAST(SUBSTRING($date,9,2) AS UNSIGNED) <= DAY(LAST_DAY(CONCAT(SUBSTRING($date,1,7),'-01')))";
+			$clauses['join'] .= " LEFT JOIN $meta AS lf_calendar_end ON (lf_calendar_end.post_id = $posts.ID AND lf_calendar_end.meta_key = 'lf_event_end_datetime' AND lf_calendar_end.meta_id = (SELECT MIN(lf_calendar_last.meta_id) FROM $meta AS lf_calendar_last WHERE lf_calendar_last.post_id = $posts.ID AND lf_calendar_last.meta_key = 'lf_event_end_datetime'))";
+			$end = 'lf_calendar_end.meta_value';
+			$effective_end = "CASE WHEN $posts.post_type = 'lf_calendar_event' AND $end REGEXP '^[1-9][0-9]{3}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01]) ([01][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$' AND CAST(SUBSTRING($end,9,2) AS UNSIGNED) <= DAY(LAST_DAY(CONCAT(SUBSTRING($end,1,7),'-01'))) AND CAST($end AS DATETIME) > CAST($date AS DATETIME) THEN CAST($end AS DATETIME) WHEN $posts.post_type = 'lf_match' THEN DATE_ADD(CAST($date AS DATETIME), INTERVAL ($match_duration) MINUTE) ELSE DATE_ADD(CAST($date AS DATETIME), INTERVAL 1 HOUR) END";
 			foreach ( array( 'start_date' => '>=', 'end_date' => '<=' ) as $key => $comparison ) {
 				$date = public_collection_date( $filters[$key] );
-				if ( $date ) { $clauses['where'] .= $wpdb->prepare( " AND lf_calendar_date.meta_value $comparison %s", $date . ( 'start_date' === $key ? ' 00:00' : ' 23:59:59' ) ); }
+				if ( $date ) {
+					$clauses['where'] .= 'start_date' === $key ? $wpdb->prepare( " AND ($effective_end) > %s", $date . ' 00:00:00' ) : $wpdb->prepare( ' AND lf_calendar_date.meta_value <= %s', $date . ' 23:59:59' );
+				}
 			}
 			$exists = static function( $key, $value ) use ( $wpdb, $posts, $meta ) {
 				return $wpdb->prepare( "EXISTS (SELECT 1 FROM $meta AS lf_filter WHERE lf_filter.post_id = $posts.ID AND lf_filter.meta_key = %s AND lf_filter.meta_value = %s)", $key, $value );
@@ -647,11 +708,16 @@ class Renderer {
 				$clauses['where'] .= ' AND (' . implode( ' OR ', $search_where ) . ')';
 			}
 			$clauses['groupby'] = "$posts.ID";
-			$clauses['orderby'] = "lf_calendar_date.meta_value ASC, $posts.ID ASC";
+			$direction = 'desc' === $filters['order'] ? 'DESC' : 'ASC';
+			$clauses['orderby'] = "CAST(lf_calendar_date.meta_value AS DATETIME) $direction, $posts.ID $direction";
 			return $clauses;
 		};
 		add_filter( 'posts_clauses', $clauses_filter, 10, 2 );
 		try { $query->query( $args ); } finally { remove_filter( 'posts_clauses', $clauses_filter, 10 ); }
+		if ( ! $wpdb->last_error && ! $query->posts && $page > 1 ) {
+			$first_page = $this->get_calendar_page( array_merge( $filters, array( 'page' => 1, 'limit' => 1 ) ) );
+			return array( 'items' => array(), 'total' => $first_page['total'], 'pages' => (int) ceil( $first_page['total'] / $limit ) );
+		}
 		$items = array();
 		$timezone = wp_timezone();
 		$format = (string) get_option( 'time_format', 'g:i a' );
@@ -677,13 +743,13 @@ class Renderer {
 		$events = array();
 
 		foreach ( $matches as $match ) {
-			$datetime = date_create_immutable_from_format( 'Y-m-d H:i', (string) $match['datetime_raw'], $timezone );
+			$datetime = $this->calendar_datetime( $match['datetime_raw'], $timezone );
 
 			if ( ! $datetime ) {
 				continue;
 			}
 
-			$end        = $datetime->modify( '+1 hour' );
+			$end        = $datetime->modify( '+' . Field_Availability_Manager::get_match_duration_minutes( $match['id'] ) . ' minutes' );
 			$sport_slug = $match['sport_slug'] ? $match['sport_slug'] : 'soccer';
 			$sport_label = $this->get_sport_display_label( $sport_slug, $match['sport_label'] );
 			$title      = sprintf(
@@ -743,13 +809,13 @@ class Renderer {
 		$events = array();
 
 		foreach ( $items as $item ) {
-			$datetime = date_create_immutable_from_format( 'Y-m-d H:i', (string) $item['datetime_raw'], $timezone );
+			$datetime = $this->calendar_datetime( $item['datetime_raw'], $timezone );
 
 			if ( ! $datetime ) {
 				continue;
 			}
 
-			$end = ! empty( $item['end_datetime_raw'] ) ? date_create_immutable_from_format( 'Y-m-d H:i', (string) $item['end_datetime_raw'], $timezone ) : false;
+			$end = ! empty( $item['end_datetime_raw'] ) ? $this->calendar_datetime( $item['end_datetime_raw'], $timezone ) : false;
 
 			if ( ! $end || $end->getTimestamp() <= $datetime->getTimestamp() ) {
 				$end = $datetime->modify( '+1 hour' );
@@ -794,6 +860,15 @@ class Renderer {
 		}
 
 		return $events;
+	}
+
+	/** Accept canonical site-local datetimes with or without stored seconds. */
+	protected function calendar_datetime( $value, $timezone ) {
+		$value = (string) $value;
+		$format = 19 === strlen( $value ) ? 'Y-m-d H:i:s' : 'Y-m-d H:i';
+		$date = \DateTimeImmutable::createFromFormat( '!' . $format, $value, $timezone );
+		$errors = \DateTimeImmutable::getLastErrors();
+		return $date && ( false === $errors || ( ! $errors['warning_count'] && ! $errors['error_count'] ) ) && $date->format( $format ) === $value ? $date : false;
 	}
 
 	/**

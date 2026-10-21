@@ -1530,6 +1530,7 @@ class Admin {
 			<div class="wrap leagueflow-admin-page">
 				<h1><?php esc_html_e( 'Standings', 'leagueflow' ); ?></h1>
 				<p class="leagueflow-page-intro"><?php esc_html_e( 'Standings are calculated from finished, published matches. Pick a sport in the sport switcher for its full table and filters. This page shows every sport, grouped by league level.', 'leagueflow' ); ?></p>
+				<?php $this->render_standings_diagnostics( $competition_id, $season_id, 0, $league_level_id ); ?>
 				<?php $this->render_admin_sport_standings_overview( $competition_id, $season_id, $league_level_id ); ?>
 			</div>
 			<?php
@@ -1562,6 +1563,7 @@ class Admin {
 					<a href="<?php echo esc_url( add_query_arg( array( 'page' => 'leagueflow-settings', 'rules_scope' => 'sport:' . $sport_slug ), admin_url( 'admin.php' ) ) . '#leagueflow-rule-overrides' ); ?>"><?php esc_html_e( 'Scoring for this sport', 'leagueflow' ); ?></a>
 				<?php endif; ?>
 			</p>
+			<?php $this->render_standings_diagnostics( $competition_id, $season_id, $sport_id, $league_level_id ); ?>
 			<?php if ( ! $league_level_id && count( $levels ) > 1 ) : ?>
 				<p class="description"><?php esc_html_e( 'Each level (division) has its own table. Choose a level to see one table.', 'leagueflow' ); ?></p>
 			<?php endif; ?>
@@ -1576,6 +1578,33 @@ class Admin {
 			<?php endforeach; ?>
 		</div>
 		<?php
+	}
+
+	/** Explain excluded results in the same context as the visible standings. */
+	protected function render_standings_diagnostics( $competition_id, $season_id, $sport_id, $league_level_id ) {
+		$diagnostics = $this->standings_service->get_diagnostics( $competition_id, $season_id, $sport_id, $league_level_id );
+		$labels = array(
+			'counted' => __( 'Finished league results counted', 'leagueflow' ),
+			'scored_not_finished' => __( 'Scores entered, but not marked Finished', 'leagueflow' ),
+			'incomplete' => __( 'Finished results with missing or invalid scores', 'leagueflow' ),
+			'unpublished' => __( 'Not published on the website', 'leagueflow' ),
+			'invalid_teams' => __( 'Missing, inaccessible, or invalid teams', 'leagueflow' ),
+			'knockout' => __( 'Knockout fixtures excluded from league standings', 'leagueflow' ),
+			'unfinished' => __( 'Fixtures awaiting a final result', 'leagueflow' ),
+		);
+		echo '<details class="leagueflow-standings-diagnostics"><summary>' . esc_html__( 'Why a result is missing from standings', 'leagueflow' ) . '</summary><ul>';
+		foreach ( $labels as $key => $label ) {
+			$count = (int) ( $diagnostics['counts'][ $key ] ?? 0 );
+			if ( ! $count && 'counted' !== $key ) { continue; }
+			echo '<li><strong>' . esc_html( number_format_i18n( $count ) . ' — ' . $label ) . '</strong>';
+			$links = array();
+			foreach ( $diagnostics['examples'][ $key ] ?? array() as $id ) {
+				if ( current_user_can( 'edit_post', $id ) ) { $links[] = '<a href="' . esc_url( get_edit_post_link( $id, 'raw' ) ) . '">' . esc_html( get_the_title( $id ) ) . '</a>'; }
+			}
+			if ( $links ) { echo ': ' . implode( ', ', $links ); } // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- links individually escaped.
+			echo '</li>';
+		}
+		echo '</ul><p>' . esc_html__( 'If a match is not listed, check the selected sport, season, competition and level. Teams and matches must share the intended context.', 'leagueflow' ) . '</p></details>';
 	}
 
 	/**
@@ -2321,8 +2350,13 @@ class Admin {
 			<tr>
 				<th scope="row"><label for="lf_manager_user_ids"><?php esc_html_e( 'Team Managers', 'leagueflow' ); ?></label></th>
 				<td>
+					<?php if ( can_manage_player_accounts() ) : ?>
+					<input type="hidden" name="lf_manager_user_ids_present" value="1" />
 					<?php $this->render_user_select( 'lf_manager_user_ids[]', 'lf_manager_user_ids', $managers, true, __( 'Select managers', 'leagueflow' ) ); ?>
 					<p class="description"><?php esc_html_e( 'Managers can edit this team profile and roster from the front-end portal.', 'leagueflow' ); ?></p>
+					<?php else : ?>
+					<p><?php esc_html_e( 'Ask an administrator to assign or remove team managers.', 'leagueflow' ); ?></p>
+					<?php endif; ?>
 				</td>
 			</tr>
 			<tr>
@@ -2720,6 +2754,7 @@ class Admin {
 	 */
 	public function render_match_metabox( $post ) {
 		wp_nonce_field( 'leagueflow_save_match', 'leagueflow_match_nonce' );
+		printf( '<input type="hidden" name="leagueflow_match_state" value="%s" />', esc_attr( self::match_form_state( $post->ID ) ) );
 
 		$sport_slug      = $this->get_editor_sport_slug( $post->ID );
 		$league_level_id = $this->get_editor_league_level_id( $post->ID );
@@ -2739,7 +2774,7 @@ class Admin {
 		<table class="form-table leagueflow-form-table" role="presentation">
 			<tr>
 				<th scope="row"><label for="lf_match_datetime"><?php esc_html_e( 'Date and Time', 'leagueflow' ); ?></label></th>
-				<td><input type="datetime-local" id="lf_match_datetime" name="lf_match_datetime" value="<?php echo esc_attr( $datetime ); ?>" /></td>
+				<td><input type="datetime-local" id="lf_match_datetime" name="lf_match_datetime" value="<?php echo esc_attr( $datetime ); ?>" /><p class="description"><?php echo esc_html( sprintf( __( 'Match time in %s. Publish the post now so this future fixture appears on the website; the WordPress Publish date controls when the listing becomes visible.', 'leagueflow' ), wp_timezone_string() ) ); ?></p></td>
 			</tr>
 			<tr>
 				<th scope="row"><label for="lf_venue"><?php esc_html_e( 'Venue', 'leagueflow' ); ?></label></th>
@@ -2790,7 +2825,12 @@ class Admin {
 			</tr>
 			<tr>
 				<th scope="row"><label for="lf_status"><?php esc_html_e( 'Status', 'leagueflow' ); ?></label></th>
-				<td><?php $this->render_select( 'lf_status', $this->statuses, (string) get_post_meta( $post->ID, 'lf_status', true ), __( 'Select status', 'leagueflow' ) ); ?></td>
+				<td>
+					<?php $this->render_select( 'lf_status', $this->statuses, (string) get_post_meta( $post->ID, 'lf_status', true ), __( 'Select status', 'leagueflow' ) ); ?>
+					<p class="description"><?php esc_html_e( 'Standings count published league matches marked Finished with both scores, or a forfeit. Saving scores alone keeps the selected status.', 'leagueflow' ); ?></p>
+					<?php if ( 'volleyball' === $sport_slug ) : ?><p class="description"><strong><?php esc_html_e( 'Volleyball: Home Score and Away Score are sets won (for example 2–1), not rally points. Set Scores below is an optional note.', 'leagueflow' ); ?></strong></p><?php endif; ?>
+					<p><button type="submit" name="lf_finalize_result" value="1" class="button button-secondary"><?php esc_html_e( 'Save match as final result', 'leagueflow' ); ?></button></p>
+				</td>
 			</tr>
 			<tr>
 				<th scope="row"><label for="lf_outcome"><?php esc_html_e( 'Result Type', 'leagueflow' ); ?></label></th>
@@ -2982,12 +3022,7 @@ class Admin {
 			delete_post_meta( $post_id, 'lf_founded_year' );
 		}
 
-		$manager_ids = sanitize_user_id_list( wp_unslash( $_POST['lf_manager_user_ids'] ?? array() ) );
-		update_post_meta( $post_id, 'lf_manager_user_ids', $manager_ids );
-
-		foreach ( $manager_ids as $manager_id ) {
-			add_user_role_if_missing( $manager_id, 'leagueflow_team_manager' );
-		}
+		$this->save_team_manager_accounts( $post_id );
 
 		$adjustment = isset( $_POST['lf_points_adjustment'] ) ? (int) wp_unslash( $_POST['lf_points_adjustment'] ) : 0;
 		if ( 0 === $adjustment ) {
@@ -3110,6 +3145,45 @@ class Admin {
 	 * @return void
 	 */
 	public function save_match_meta( $post_id, $post ) {
+		// Updating a linked knockout fixture title can trigger this hook again
+		// while the source editor's POST body is still present.
+		if ( isset( $_POST['post_ID'] ) && ( ! is_scalar( $_POST['post_ID'] ) || absint( $_POST['post_ID'] ) !== (int) $post_id ) ) { return; }
+		if ( $this->syncing_match_title || ! $this->can_save( $post_id, 'leagueflow_match_nonce', 'leagueflow_save_match' ) ) {
+			return;
+		}
+		$lock = db_lock_name( 'result', (string) $post_id );
+		if ( ! acquire_db_lock( $lock, 1 ) ) {
+			$this->queue_notice( __( 'Another person is updating this match. Reload and try again. Match details were not changed.', 'leagueflow' ), 'error' );
+			return;
+		}
+		try {
+			clean_post_cache( $post_id );
+			if ( ! current_user_can( 'edit_post', $post_id ) ) { return; }
+			if ( isset( $_POST['leagueflow_match_state'] ) && ( ! is_string( $_POST['leagueflow_match_state'] ) || ! hash_equals( self::match_form_state( $post_id ), wp_unslash( $_POST['leagueflow_match_state'] ) ) ) ) {
+				$this->queue_notice( __( 'The match changed after you opened this form. Reload to review the latest result before saving. Match details were not changed.', 'leagueflow' ), 'error' );
+				return;
+			}
+			$this->save_match_meta_locked( $post_id, $post );
+		} finally {
+			release_db_lock( $lock );
+		}
+	}
+
+	/**
+	 * Detect stale result forms without rejecting the current WordPress save.
+	 * Core applies publication and taxonomy edits before save_post_lf_match, so
+	 * this token covers match metadata; the referee token also covers visibility.
+	 */
+	public static function match_form_state( $post_id ) {
+		$state = array();
+		foreach ( array( 'lf_home_team_id', 'lf_away_team_id', 'lf_home_score', 'lf_away_score', 'lf_status', 'lf_outcome', 'lf_is_knockout', 'lf_winner_team_id', 'lf_match_datetime', 'lf_venue', 'lf_next_match_id', 'lf_next_match_slot', 'lf_round_order', 'lf_round_label' ) as $key ) {
+			$state[ $key ] = get_post_meta( $post_id, $key, true );
+		}
+		return hash_hmac( 'sha256', wp_json_encode( $state ), wp_salt( 'nonce' ) );
+	}
+
+	/** Save validated match details while holding the shared result lock. */
+	protected function save_match_meta_locked( $post_id, $post ) {
 		unset( $post );
 
 		if ( $this->syncing_match_title ) {
@@ -3124,6 +3198,10 @@ class Admin {
 		$previous_venue    = (string) get_post_meta( $post_id, 'lf_venue', true );
 		$datetime = sanitize_text_field( wp_unslash( $_POST['lf_match_datetime'] ?? '' ) );
 		$datetime = $datetime ? str_replace( 'T', ' ', $datetime ) : '';
+		if ( '' !== $datetime && ! $this->is_valid_local_datetime( $datetime ) ) {
+			$this->queue_notice( __( 'Enter a valid match date and time. Match details were not changed.', 'leagueflow' ), 'error' );
+			return;
+		}
 		$venue    = sanitize_text_field( wp_unslash( $_POST['lf_venue'] ?? '' ) );
 
 		$home_team_id = isset( $_POST['lf_home_team_id'] ) ? absint( wp_unslash( $_POST['lf_home_team_id'] ) ) : 0;
@@ -3169,6 +3247,7 @@ class Admin {
 		if ( ! isset( $this->statuses[ $status ] ) ) {
 			$status = 'scheduled';
 		}
+		if ( isset( $_POST['lf_finalize_result'] ) && '1' === $_POST['lf_finalize_result'] ) { $status = 'finished'; }
 
 		$home_score = trim( sanitize_text_field( wp_unslash( $_POST['lf_home_score'] ?? '' ) ) );
 		$away_score = trim( sanitize_text_field( wp_unslash( $_POST['lf_away_score'] ?? '' ) ) );
@@ -3229,11 +3308,13 @@ class Admin {
 
 		$this->update_or_delete_meta( $post_id, 'lf_match_datetime', $datetime );
 		$this->update_or_delete_meta( $post_id, 'lf_venue', $venue );
+		foreach ( array( 'home' => $home_team_id, 'away' => $away_team_id ) as $slot => $team_id ) {
+			if ( $team_id !== (int) get_post_meta( $post_id, 'lf_' . $slot . '_team_id', true ) ) { delete_post_meta( $post_id, '_lf_' . $slot . '_advanced_from' ); }
+		}
 		update_post_meta( $post_id, 'lf_home_team_id', $home_team_id );
 		update_post_meta( $post_id, 'lf_away_team_id', $away_team_id );
 		$this->update_or_delete_meta( $post_id, 'lf_home_score', '' === $home_score ? '' : (string) absint( $home_score ) );
 		$this->update_or_delete_meta( $post_id, 'lf_away_score', '' === $away_score ? '' : (string) absint( $away_score ) );
-		update_post_meta( $post_id, 'lf_status', $status );
 		$this->update_or_delete_meta( $post_id, 'lf_outcome', $outcome );
 
 		update_post_meta( $post_id, 'lf_is_knockout', $is_knockout );
@@ -3273,6 +3354,13 @@ class Admin {
 		}
 
 		$this->sync_match_title( $post_id, $home_team_id, $away_team_id, $datetime );
+		// Observers of the lifecycle transition must see the complete saved result.
+		update_post_meta( $post_id, 'lf_status', $status );
+		if ( 'finished' !== $status && '' !== $home_score && '' !== $away_score ) {
+			$this->queue_notice( __( 'Scores saved. This match is not Finished, so it is not included in standings. Use Save match as final result when play is complete.', 'leagueflow' ), 'warning' );
+		} elseif ( 'finished' === $status && 'publish' !== get_post_status( $post_id ) ) {
+			$this->queue_notice( __( 'Final result saved. Publish this match to include it in public standings.', 'leagueflow' ), 'warning' );
+		}
 
 		if ( ! empty( $_POST['lf_auto_schedule_match'] ) ) {
 			$sport_slug = $match_sport_id ? get_term( $match_sport_id, 'lf_sport' ) : null;
@@ -3377,9 +3465,9 @@ class Admin {
 		$start = $start ? str_replace( 'T', ' ', $start ) : '';
 		$end   = $end ? str_replace( 'T', ' ', $end ) : '';
 
-		if ( $start && $end && strtotime( $end ) < strtotime( $start ) ) {
-			$end = '';
-			$this->queue_notice( __( 'Calendar event end time must be after the start time.', 'leagueflow' ), 'error' );
+		if ( ( $start && ! $this->is_valid_local_datetime( $start ) ) || ( $end && ! $this->is_valid_local_datetime( $end ) ) || ( $end && ( ! $start || $end <= $start ) ) ) {
+			$this->queue_notice( __( 'Use valid event dates and an end time after the start time. Event details were not changed.', 'leagueflow' ), 'error' );
+			return;
 		}
 
 		$type = sanitize_key( wp_unslash( $_POST['lf_event_type'] ?? 'drop_in' ) );
@@ -3405,6 +3493,15 @@ class Admin {
 
 		$this->save_calendar_event_sport_choice( $post_id );
 		$this->assign_league_level_from_request( $post_id );
+	}
+
+	/** Strict site-local calendar input; rejects impossible dates and DST gaps. */
+	protected function is_valid_local_datetime( $value ) {
+		if ( ! is_string( $value ) || ! preg_match( '/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(?::\d{2})?$/', $value ) ) { return false; }
+		$format = strlen( $value ) > 16 ? 'Y-m-d H:i:s' : 'Y-m-d H:i';
+		$date = \DateTimeImmutable::createFromFormat( '!' . $format, $value, wp_timezone() );
+		$errors = \DateTimeImmutable::getLastErrors();
+		return $date && ( ! $errors || ( ! $errors['warning_count'] && ! $errors['error_count'] ) ) && $date->format( $format ) === $value;
 	}
 
 	/**
@@ -4481,13 +4578,41 @@ class Admin {
 			return $redirect_to;
 		}
 
+		$updated = 0;
+		$skipped = 0;
 		foreach ( $post_ids as $post_id ) {
-			update_post_meta( $post_id, 'lf_status', $status );
+			$lock = db_lock_name( 'result', (string) $post_id );
+			if ( ! acquire_db_lock( $lock, 0 ) ) { ++$skipped; continue; }
+			$saved = false;
+			try {
+				clean_post_cache( $post_id );
+				if ( 'lf_match' !== get_post_type( $post_id ) || ! current_user_can( 'edit_post', $post_id ) ) { ++$skipped; continue; }
+				if ( 'finished' === $status ) {
+					$home = get_post_meta( $post_id, 'lf_home_score', true );
+					$away = get_post_meta( $post_id, 'lf_away_score', true );
+					$outcome = get_post_meta( $post_id, 'lf_outcome', true );
+					$forfeit = is_string( $outcome ) && in_array( $outcome, array( 'forfeit_home', 'forfeit_away', 'double_forfeit' ), true );
+					if ( ( ! $forfeit && ( ! Match_Status::is_valid_score( $home ) || ! Match_Status::is_valid_score( $away ) ) )
+						|| ( $forfeit && ( ( '' !== $home && ! Match_Status::is_valid_score( $home ) ) || ( '' !== $away && ! Match_Status::is_valid_score( $away ) ) ) ) ) {
+						++$skipped;
+						continue;
+					}
+				}
+				update_post_meta( $post_id, 'lf_status', $status );
+				$saved = $status === get_post_meta( $post_id, 'lf_status', true );
+				if ( $saved ) { ++$updated; } else { ++$skipped; }
+			} finally {
+				release_db_lock( $lock );
+			}
+			if ( $saved && 'finished' === $status ) { $this->knockout_service->advance_winner( $post_id ); }
+		}
+		if ( $skipped ) {
+			$this->queue_notice( sprintf( __( '%d selected matches were not changed. Check edit access, concurrent updates and complete valid scores before marking a match Finished.', 'leagueflow' ), $skipped ), 'warning' );
 		}
 
 		return add_query_arg(
 			array(
-				'leagueflow_bulk_updated' => count( $post_ids ),
+				'leagueflow_bulk_updated' => $updated,
 				'leagueflow_bulk_status'  => rawurlencode( $this->statuses[ $status ] ),
 			),
 			$redirect_to
@@ -5148,6 +5273,36 @@ class Admin {
 	 * @param int $post_id Player post ID.
 	 * @return bool Whether account provisioning may continue.
 	 */
+	protected function save_team_manager_accounts( $post_id ) {
+		if ( ! can_manage_player_accounts() || ( ! array_key_exists( 'lf_manager_user_ids', $_POST ) && ! isset( $_POST['lf_manager_user_ids_present'] ) ) ) {
+			return;
+		}
+		$raw_ids = wp_unslash( $_POST['lf_manager_user_ids'] ?? array() );
+		if ( ! is_array( $raw_ids ) ) { return; }
+		foreach ( $raw_ids as $id ) {
+			if ( ! is_scalar( $id ) || ! ctype_digit( (string) $id ) ) { return; }
+		}
+		$manager_ids = sanitize_user_id_list( $raw_ids );
+		$previous_ids = get_team_manager_user_ids( $post_id );
+		foreach ( array_diff( $manager_ids, $previous_ids ) as $id ) {
+			if ( ! can_link_player_account( $id ) ) {
+				$this->queue_notice( __( 'Only authorized, low-privilege portal accounts can be added as team managers. Manager assignments were not changed.', 'leagueflow' ), 'error' );
+				return;
+			}
+		}
+		foreach ( array_diff( $previous_ids, $manager_ids ) as $id ) {
+			if ( ! current_user_can( 'edit_user', $id ) || ! current_user_can( 'promote_user', $id ) ) {
+				$this->queue_notice( __( 'You cannot remove one of the selected manager accounts. Manager assignments were not changed.', 'leagueflow' ), 'error' );
+				return;
+			}
+		}
+		update_post_meta( $post_id, 'lf_manager_user_ids', $manager_ids );
+		foreach ( array_diff( $manager_ids, $previous_ids ) as $id ) {
+			add_user_role_if_missing( $id, 'leagueflow_team_manager' );
+		}
+	}
+
+	/** Save a player account link only for staff authorized to manage its identity. */
 	protected function save_player_identity_meta( $post_id ) {
 		$email = sanitize_email( wp_unslash( $_POST['lf_email'] ?? '' ) );
 		if ( is_email( $email ) ) {
@@ -5321,6 +5476,14 @@ class Admin {
 	protected function render_user_select( $name, $id, $selected, $multiple, $placeholder ) {
 		$selected = sanitize_user_id_list( $selected );
 		$attrs    = $multiple ? ' multiple size="6"' : '';
+		$options  = $this->get_portal_user_options();
+		// Keep current assignments visible even beyond the bounded user picker.
+		// Otherwise submitting an unrelated edit could silently remove a manager.
+		foreach ( $selected as $user_id ) {
+			if ( isset( $options[ $user_id ] ) ) { continue; }
+			$user = get_user_by( 'id', $user_id );
+			if ( $user ) { $options[ $user_id ] = sprintf( '%1$s <%2$s>', $user->display_name ?: $user->user_email, $user->user_email ); }
+		}
 
 		printf( '<select id="%1$s" name="%2$s"%3$s%4$s>', esc_attr( $id ), esc_attr( $name ), $attrs, $this->get_searchable_select_attributes( __( 'Filter users by name or email', 'leagueflow' ) ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 
@@ -5328,8 +5491,9 @@ class Admin {
 			printf( '<option value="">%s</option>', esc_html( $placeholder ) );
 		}
 
-		foreach ( $this->get_portal_user_options() as $user_id => $label ) {
+		foreach ( $options as $user_id => $label ) {
 			if ( 'lf_user_id' === $id && ! can_link_player_account( $user_id ) ) { continue; }
+			if ( 'lf_manager_user_ids' === $id && ! in_array( (int) $user_id, $selected, true ) && ! can_link_player_account( $user_id ) ) { continue; }
 			printf(
 				'<option value="%1$s" %2$s>%3$s</option>',
 				esc_attr( (string) $user_id ),

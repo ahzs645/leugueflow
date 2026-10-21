@@ -223,6 +223,8 @@ $tests['SEC-06 event REST'] = static function() use ( $admin_id, $contributor, $
 $tests['SEC-07 knockout'] = static function() use ( $knockout, $admin, $admin_id, $contributor, $other, $team_a, $team_b ) {
 	wp_set_current_user( $admin_id ); $source = lf_post( 'lf_match', $contributor ); $target = lf_post( 'lf_match', $contributor ); $foreign = lf_post( 'lf_match', $other ); $page = lf_post( 'page', $admin_id, 'publish' );
 	update_post_meta( $source, 'lf_home_team_id', $team_a ); update_post_meta( $source, 'lf_away_team_id', $team_b ); update_post_meta( $source, 'lf_winner_team_id', $team_a );
+	update_post_meta( $source, 'lf_status', 'finished' );
+	foreach ( array( $source, $target, $foreign ) as $id ) { update_post_meta( $id, 'lf_is_knockout', 1 ); }
 	wp_set_current_user( $contributor ); $title = get_the_title( $page );
 	foreach ( array( $page, $foreign ) as $invalid ) {
 		update_post_meta( $source, 'lf_next_match_id', $invalid );
@@ -250,6 +252,8 @@ $tests['SEC-07 knockout'] = static function() use ( $knockout, $admin, $admin_id
 	lf_assert( is_array( $tree ) && $tree['linked'] && $tree['roots'][0]['id'] === $target && $tree['roots'][0]['children'][0]['id'] === $source, 'Anonymous linked bracket tree failed.' );
 	wp_set_current_user( $admin_id ); $chain = array(); $empty_source = lf_post( 'lf_match', $admin_id );
 	for ( $i = 0; $i < 101; ++$i ) { $chain[] = lf_post( 'lf_match', $admin_id ); }
+	// The hop-limit contract operates on an otherwise valid knockout graph.
+	foreach ( array_merge( array( $empty_source ), $chain ) as $id ) { update_post_meta( $id, 'lf_is_knockout', 1 ); }
 	for ( $i = 0; $i < 100; ++$i ) { update_post_meta( $chain[$i], 'lf_next_match_id', $chain[$i+1] ); }
 	lf_assert( ! $knockout->can_advance_to( $empty_source, $chain[0] ), '101-node graph exceeded the hop guard.' );
 	delete_post_meta( $chain[99], 'lf_next_match_id' );

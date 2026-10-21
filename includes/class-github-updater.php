@@ -11,7 +11,7 @@ defined( 'ABSPATH' ) || exit;
 
 final class GitHub_Updater {
 
-	private const REPOSITORY = 'https://github.com/amirrad98/intramurals';
+	private const REPOSITORY = 'https://github.com/ahzs645/leugueflow';
 	private const VERSION_PATTERN = '(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)';
 
 	public static function register() {
@@ -26,7 +26,7 @@ final class GitHub_Updater {
 
 	/** Return validated release metadata, with a short negative cache for outages. */
 	private static function manifest( $version = '' ) {
-		$cache_key = 'leagueflow_github_release_' . md5( $version ?: 'latest' );
+		$cache_key = 'leagueflow_github_release_' . md5( self::REPOSITORY . '|' . ( $version ?: 'latest' ) );
 		$cached = get_site_transient( $cache_key );
 		if ( false !== $cached ) {
 			return isset( $cached['unavailable'] ) ? null : $cached;

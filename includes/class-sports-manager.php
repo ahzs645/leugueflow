@@ -231,19 +231,19 @@ class Sports_Manager {
 				'slug'             => 'volleyball',
 				'label'            => __( 'Volleyball', 'leagueflow' ),
 				'menu_label'       => __( 'Volleyball', 'leagueflow' ),
-				'description'      => __( 'Best-of-five sets with rally scoring, libero usage, and set-by-set results.', 'leagueflow' ),
+				'description'      => __( 'Set-based results. The number of sets and scoring format follow your league rules.', 'leagueflow' ),
 				'table_labels'     => array(
 					'for'        => __( 'Sets For', 'leagueflow' ),
 					'against'    => __( 'Sets Against', 'leagueflow' ),
 					'difference' => __( 'Set Diff', 'leagueflow' ),
 				),
-				'score_label'      => __( 'Set Points', 'leagueflow' ),
-				'match_structure'  => __( 'Best of 5 sets', 'leagueflow' ),
+				'score_label'      => __( 'Sets won', 'leagueflow' ),
+				'match_structure'  => __( 'Set-based scoring', 'leagueflow' ),
 				'match_fields'     => array(
 					array(
 						'key'         => 'lf_set_scores',
 						'label'       => __( 'Set Scores', 'leagueflow' ),
-						'description' => __( 'List each set score and any deciding set details.', 'leagueflow' ),
+						'description' => __( 'Optional set-by-set notes (for example 25-18, 21-25, 15-11). Enter sets won in Home Score and Away Score to calculate standings.', 'leagueflow' ),
 					),
 					array(
 						'key'         => 'lf_match_stats_summary',

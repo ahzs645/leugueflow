@@ -179,6 +179,10 @@ class Join_Request_Service {
 			$flags[] = 'sport_missing';
 		}
 
+		if ( $has_player && ! Registration_Consent::is_current( $player_id ) ) {
+			$flags[] = 'consent_pending';
+		}
+
 		if ( $team_id ) {
 			if ( ! $is_team ) {
 				$flags[] = 'team_missing';
@@ -260,6 +264,7 @@ class Join_Request_Service {
 		return array(
 			'request_invalid'     => __( 'This request record is in the Trash or is not a saved record: it cannot be reviewed', 'leagueflow' ),
 			'status_unknown'      => __( 'Status is missing or not recognised: review before deciding', 'leagueflow' ),
+			'consent_pending'     => __( 'The player must acknowledge the current registration documents in their portal before being added to a team', 'leagueflow' ),
 			'missing_player'      => __( 'Player record missing', 'leagueflow' ),
 			'sport_missing'       => __( 'Request has no sport', 'leagueflow' ),
 			'team_missing'        => __( 'Requested team no longer exists', 'leagueflow' ),
@@ -341,6 +346,10 @@ class Join_Request_Service {
 		}
 
 		$actions[] = 'dismiss';
+
+		if ( in_array( 'consent_pending', $flags, true ) ) {
+			$actions = array_values( array_diff( $actions, array( 'approve', 'assign' ) ) );
+		}
 
 		return $actions;
 	}
@@ -499,6 +508,10 @@ class Join_Request_Service {
 
 				if ( $this->get_player_team_ids_in_sport( $info['player_id'], $sport_slug, $team_id ) ) {
 					return new \WP_Error( 'leagueflow_request_member', __( 'The player is already on another team in this sport.', 'leagueflow' ) );
+				}
+
+				if ( ! Registration_Consent::is_current( $info['player_id'] ) ) {
+					return new \WP_Error( 'leagueflow_consent_pending', __( 'The player needs to acknowledge the current registration documents first.', 'leagueflow' ) );
 				}
 
 				$before = get_player_team_ids( $info['player_id'] );
