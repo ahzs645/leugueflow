@@ -76,6 +76,16 @@ For a new stable release:
 4. Create an annotated matching tag (`git tag -a vX.Y.Z -m 'LeagueFlow X.Y.Z'`)
    and push it (`git push origin vX.Y.Z`).
 
+Alternatively, after merging the version into `main`, open **Actions → LeagueFlow
+checks and release → Run workflow**, select `main`, and enter `vX.Y.Z` in
+**release_tag**. This repeats all checks, creates an annotated tag at the exact
+tested commit, and publishes through the same verified-asset process. Leaving
+the field blank runs checks only. A moved `main` stops creation of a new tag;
+an existing matching tag can resume its original run after `main` advances.
+A tag pointing at another commit stops publication; tags are never moved. The manual workflow
+publishes in the same run because tags created with `GITHUB_TOKEN` do not trigger
+another push workflow.
+
 The tag workflow repeats all checks before publishing. It creates a draft,
 verifies all three assets and then makes the release public. Reruns compare bytes
 and can finish incomplete drafts; they never overwrite different existing assets.
