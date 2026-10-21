@@ -114,6 +114,8 @@ class Settings {
 		add_settings_field( 'player_registration_open', __( 'Player registration', 'leagueflow' ), array( $this, 'render_checkbox_field' ), 'leagueflow-settings', 'leagueflow_registration', array( 'key' => 'player_registration_open', 'label_for' => 'leagueflow_setting_player_registration_open', 'label' => __( 'Players can create profiles and request or ask for team placement', 'leagueflow' ), 'class' => 'leagueflow-setting-row--wide' ) );
 		add_settings_field( 'registration_email', __( 'Registration inbox', 'leagueflow' ), array( $this, 'render_text_field' ), 'leagueflow-settings', 'leagueflow_registration', array( 'key' => 'registration_email', 'label_for' => 'leagueflow_setting_registration_email', 'type' => 'email', 'placeholder' => get_option( 'admin_email', '' ), 'description' => __( 'Receives player placement requests. The site administration email is used when this is blank.', 'leagueflow' ), 'class' => 'leagueflow-setting-row--wide' ) );
 
+		add_settings_field( 'registration_documents', __( 'Waiver and Code of Conduct', 'leagueflow' ), array( $this, 'render_registration_documents' ), 'leagueflow-settings', 'leagueflow_registration', array( 'class' => 'leagueflow-setting-row--wide' ) );
+
 		add_settings_field( 'team_slug', __( 'Team slug', 'leagueflow' ), array( $this, 'render_text_field' ), 'leagueflow-settings', 'leagueflow_display', array( 'key' => 'team_slug', 'label_for' => 'leagueflow_setting_team_slug' ) );
 		add_settings_field( 'match_slug', __( 'Match slug', 'leagueflow' ), array( $this, 'render_text_field' ), 'leagueflow-settings', 'leagueflow_display', array( 'key' => 'match_slug', 'label_for' => 'leagueflow_setting_match_slug' ) );
 		add_settings_field( 'competition_slug', __( 'Competition slug', 'leagueflow' ), array( $this, 'render_text_field' ), 'leagueflow-settings', 'leagueflow_display', array( 'key' => 'competition_slug', 'label_for' => 'leagueflow_setting_competition_slug' ) );
@@ -150,6 +152,12 @@ class Settings {
 		$sanitized['captain_registration_open'] = bool_to_int( $input['captain_registration_open'] ?? 0 );
 		$sanitized['player_registration_open'] = bool_to_int( $input['player_registration_open'] ?? 0 );
 		$sanitized['registration_email'] = sanitize_email( $input['registration_email'] ?? '' );
+		$sanitized['registration_documents'] = Registration_Consent::sanitize_documents( $input['registration_documents'] ?? ( $current['registration_documents'] ?? array() ) );
+		foreach ( $sanitized['registration_documents'] as $document ) {
+			if ( $document['required'] && ( '' === $document['version'] || ( '' === trim( wp_strip_all_tags( $document['text'] ) ) && '' === $document['url'] ) ) ) {
+				add_settings_error( 'leagueflow_settings', 'leagueflow_consent_incomplete', __( 'A required registration document needs a version and approved text or a document URL. Registration is blocked until this is completed or the requirement is disabled.', 'leagueflow' ) );
+			}
+		}
 		$sanitized['cleanup_on_uninstall'] = bool_to_int( $input['cleanup_on_uninstall'] ?? 0 );
 
 		foreach ( $slug_keys as $key ) {
@@ -239,6 +247,25 @@ class Settings {
 	 */
 	public function render_registration_section() {
 		echo '<p>' . esc_html__( 'Open captain registration first for team creation. After the team-building window, close captain registration and open player registration.', 'leagueflow' ) . '</p>';
+	}
+
+	/** Configure the approved documents; no default waiver language is invented. */
+	public function render_registration_documents() {
+		$documents = Registration_Consent::sanitize_documents( get_setting( 'registration_documents', array() ) );
+		echo '<p class="description">' . esc_html__( 'Add your approved documents, then require each acknowledgement. A document is optional until its requirement is enabled. Changing its version, text or URL asks existing players to accept again.', 'leagueflow' ) . '</p>';
+		foreach ( Registration_Consent::labels() as $key => $label ) {
+			$document = $documents[ $key ];
+			$prefix = 'leagueflow_settings[registration_documents][' . $key . ']';
+			$id = 'leagueflow-document-' . $key;
+			echo '<fieldset class="leagueflow-registration-document"><legend><strong>' . esc_html( $label ) . '</strong></legend>';
+			printf( '<p><label><input type="checkbox" name="%1$s[required]" value="1" %2$s /> %3$s</label></p>', esc_attr( $prefix ), checked( $document['required'], 1, false ), esc_html__( 'Require personal acknowledgement during registration', 'leagueflow' ) );
+			foreach ( array( 'title' => __( 'Document title', 'leagueflow' ), 'version' => __( 'Version or effective date', 'leagueflow' ), 'url' => __( 'Document URL (optional when text is supplied)', 'leagueflow' ) ) as $field => $field_label ) {
+				printf( '<p><label for="%1$s-%2$s">%3$s</label><br /><input class="large-text" id="%1$s-%2$s" name="%4$s[%2$s]" type="%5$s" value="%6$s" /></p>', esc_attr( $id ), esc_attr( $field ), esc_html( $field_label ), esc_attr( $prefix ), 'url' === $field ? 'url' : 'text', esc_attr( $document[ $field ] ) );
+			}
+			printf( '<p><label for="%1$s-text">%2$s</label><br /><textarea class="large-text" rows="7" id="%1$s-text" name="%3$s[text]">%4$s</textarea></p>', esc_attr( $id ), esc_html__( 'Approved document text (basic HTML allowed)', 'leagueflow' ), esc_attr( $prefix ), esc_textarea( $document['text'] ) );
+			echo '</fieldset>';
+		}
+		echo '<p class="description">' . esc_html__( 'The acceptance record keeps the text, URL, version, account and time. Linked file contents are not copied: use a new, versioned document URL when replacing a PDF. Captains and staff cannot acknowledge for another player.', 'leagueflow' ) . '</p>';
 	}
 
 	/**

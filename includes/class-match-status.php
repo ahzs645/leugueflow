@@ -64,6 +64,32 @@ class Match_Status {
 	}
 
 	/**
+	 * Whether a score is a non-negative whole number representable by PHP.
+	 *
+	 * A blank score is not 0. Reject decimals, negative values, booleans and
+	 * malformed imported metadata before a result can affect a table or bracket.
+	 * Leading zeroes remain valid, as they are in the admin score fields.
+	 *
+	 * @param mixed $score Score value.
+	 * @return bool
+	 */
+	public static function is_valid_score( $score ) {
+		if ( ! is_int( $score ) && ! is_string( $score ) ) {
+			return false;
+		}
+
+		$value = (string) $score;
+		if ( ! preg_match( '/^[0-9]+$/D', $value ) ) {
+			return false;
+		}
+
+		$value = ltrim( $value, '0' );
+		$max   = (string) PHP_INT_MAX;
+
+		return strlen( $value ) < strlen( $max ) || ( strlen( $value ) === strlen( $max ) && strcmp( $value, $max ) <= 0 );
+	}
+
+	/**
 	 * Remember the stored status right before it is overwritten.
 	 *
 	 * Runs on the pre-update filter so both the old and new values are known

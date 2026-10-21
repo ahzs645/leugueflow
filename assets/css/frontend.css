@@ -2993,3 +2993,89 @@ body:not(.home) .unbc-page-body > .wp-block-post-content > .leagueflow-portal.al
 .leagueflow-calendar [data-calendar-pagination][hidden] {
 	display: none;
 }
+
+/* Range-aware calendar layouts, shared with the Gutenberg preview. */
+.leagueflow-calendar__layout { position: relative; }
+.leagueflow-calendar [hidden] { display: none !important; }
+.leagueflow-calendar.is-view-list .leagueflow-calendar__layout,
+.leagueflow-calendar.is-view-month.is-month-dropdown .leagueflow-calendar__layout,
+.leagueflow-calendar.is-view-month.is-month-popover .leagueflow-calendar__layout { grid-template-columns: minmax(0, 1fr); }
+.leagueflow-calendar.is-view-month.is-month-dropdown .leagueflow-calendar__panel { position: static; max-height: none; }
+.leagueflow-calendar.is-view-month.is-month-popover .leagueflow-calendar__panel { position: absolute; z-index: 30; width: min(360px, 100%); max-height: min(440px, 70vh); background: var(--lf-cal-panel); box-shadow: 0 12px 38px rgb(0 0 0 / 18%); box-sizing: border-box; }
+.leagueflow-calendar__pagination { padding: 0.8rem 1rem; border: 1px solid var(--leagueflow-border); border-radius: 8px; background: var(--lf-cal-panel); color: var(--leagueflow-text); }
+.leagueflow-calendar__pagination p { margin: 0 0 0.6rem; }
+.leagueflow-calendar__jump input { min-width: 0; width: 9.2rem; min-height: 2.25rem; padding: 0.25rem 0.4rem; border: 1px solid var(--leagueflow-border); border-radius: 4px; background: var(--lf-cal-panel); color: var(--leagueflow-text); font: inherit; font-size: 0.85rem; }
+.leagueflow-calendar__nav { flex-wrap: wrap; align-items: center; }
+.leagueflow-calendar :is(button, input, a):focus-visible { outline: 3px solid var(--leagueflow-accent); outline-offset: 3px; }
+.leagueflow-calendar[aria-busy="true"] .leagueflow-calendar__stage { opacity: 0.7; }
+@media (min-width: 1021px) {
+  .leagueflow-calendar.is-view-month.is-month-sidebar.is-sidebar-left .leagueflow-calendar__layout { grid-template-columns: minmax(300px, 0.75fr) minmax(0, 1.45fr); }
+  .leagueflow-calendar.is-view-month.is-month-sidebar.is-sidebar-left .leagueflow-calendar__panel { grid-column: 1; grid-row: 1; }
+  .leagueflow-calendar.is-view-month.is-month-sidebar.is-sidebar-left .leagueflow-calendar__board { grid-column: 2; grid-row: 1; }
+}
+@media (max-width: 760px) {
+  .leagueflow-calendar__header { flex-wrap: wrap; }
+  .leagueflow-calendar__nav { width: 100%; }
+  .leagueflow-calendar__jump { margin-right: auto; }
+  .leagueflow-calendar.is-view-month.is-month-popover .leagueflow-calendar__panel { position: static; width: 100%; max-height: none; }
+}
+
+/* Personal registration document review, shared by all portal form paths. */
+.leagueflow-portal__consent {
+	min-width: 0;
+	margin: 1.25rem 0;
+	padding: 1.25rem;
+	border: 1px solid var(--leagueflow-border, #d7dfdc);
+	border-radius: 0.5rem;
+}
+.leagueflow-portal__consent > legend {
+	padding: 0 0.4rem;
+	font-weight: 700;
+}
+.leagueflow-portal__consent-document + .leagueflow-portal__consent-document {
+	margin-top: 1.25rem;
+	padding-top: 1.25rem;
+	border-top: 1px solid var(--leagueflow-border, #d7dfdc);
+}
+.leagueflow-portal__consent-document h4 {
+	margin: 0 0 0.6rem;
+}
+.leagueflow-portal__consent-document h4 small {
+	font-size: 0.85em;
+	font-weight: 400;
+}
+.leagueflow-portal__consent-document details {
+	margin: 0.5rem 0 0.9rem;
+}
+.leagueflow-portal__consent-document summary {
+	cursor: pointer;
+	font-weight: 600;
+}
+.leagueflow-portal__consent-document details > div {
+	padding-top: 0.5rem;
+	line-height: 1.6;
+	overflow-wrap: anywhere;
+}
+.leagueflow-portal__consent .leagueflow-portal__consent-check {
+	display: flex;
+	flex-direction: row;
+	align-items: flex-start;
+	gap: 0.65rem;
+	margin-top: 0.8rem;
+}
+.leagueflow-portal__consent .leagueflow-portal__consent-check input[type="checkbox"] {
+	flex: 0 0 auto;
+	width: 1.15rem;
+	height: 1.15rem;
+	margin: 0.15rem 0 0;
+}
+
+.leagueflow-table-wrap { max-width: 100%; overflow-x: auto; }
+
+/* Embedded calendars also adapt when the theme/editor gives them a narrow column. */
+.leagueflow-calendar.is-mobile-calendar .leagueflow-calendar__layout { grid-template-columns: minmax(0, 1fr) !important; }
+.leagueflow-calendar.is-mobile-calendar .leagueflow-calendar__board,
+.leagueflow-calendar.is-mobile-calendar .leagueflow-calendar__panel { grid-column: 1 !important; grid-row: auto !important; }
+.leagueflow-calendar.is-mobile-calendar.is-month-popover .leagueflow-calendar__panel { position: static; width: 100%; max-height: none; }
+.leagueflow-calendar.is-mobile-calendar .leagueflow-calendar__header { flex-wrap: wrap; }
+.leagueflow-calendar.is-mobile-calendar .leagueflow-calendar__nav { width: 100%; }

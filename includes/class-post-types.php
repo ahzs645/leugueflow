@@ -23,6 +23,8 @@ class Post_Types {
 		add_action( 'init', array( $this, 'register_post_types' ) );
 		add_filter( 'rest_pre_dispatch', array( $this, 'protect_private_rest_directories' ), 10, 3 );
 		add_filter( 'rest_post_search_query', array( $this, 'filter_rest_directory_search' ) );
+		add_filter( 'rest_pre_insert_lf_player', array( $this, 'validate_rest_identity' ), 10, 2 );
+		add_filter( 'rest_pre_insert_lf_team', array( $this, 'validate_rest_identity' ), 10, 2 );
 		add_action( 'init', array( $this, 'register_meta' ) );
 		add_action( 'init', __NAMESPACE__ . '\\ensure_player_team_details_migration', 20 );
 		add_filter( 'use_block_editor_for_post_type', array( $this, 'use_classic_editor_for_supported_types' ), 10, 2 );
@@ -33,7 +35,79 @@ class Post_Types {
 		if ( ! current_user_can( 'edit_posts' ) && preg_match( '#^/wp/v2/(lf_team|lf_player|lf_join_request)(?:/|$)#', $request->get_route() ) ) {
 			return new \WP_Error( 'leagueflow_directory_forbidden', __( 'Directory access is restricted.', 'leagueflow' ), array( 'status' => rest_authorization_required_code() ) );
 		}
+		if ( preg_match( '#^/wp/v2/lf_join_request(?:/|$)#', $request->get_route() ) && ! in_array( $request->get_method(), array( 'GET', 'HEAD', 'OPTIONS' ), true ) ) {
+			return new \WP_Error( 'leagueflow_request_workflow_required', __( 'Use the LeagueFlow request workflow to make request changes.', 'leagueflow' ), array( 'status' => 403 ) );
+		}
 		return $result;
+	}
+
+	/**
+	 * Account links carry portal authority, not just editable profile content.
+	 *
+	 * Validate before WordPress writes the post itself so a rejected identity
+	 * payload cannot partially update its title or create an orphan profile.
+	 * Generic metadata is currently absent from the CPT schemas, but integrations
+	 * can enable custom-fields support; that must not weaken account permissions.
+	 *
+	 * @param object|\WP_Error $prepared_post Prepared post.
+	 * @param \WP_REST_Request $request REST request.
+	 * @return object|\WP_Error
+	 */
+	public function validate_rest_identity( $prepared_post, $request ) {
+		if ( is_wp_error( $prepared_post ) ) {
+			return $prepared_post;
+		}
+		$meta = $request->get_param( 'meta' );
+		if ( ! is_array( $meta ) ) {
+			return $prepared_post;
+		}
+		$type = $prepared_post->post_type ?? '';
+		if ( 'lf_player' === $type && array_key_exists( Registration_Consent::META_KEY, $meta ) ) {
+			return new \WP_Error( 'leagueflow_consent_readonly', __( 'Registration acknowledgements can only be recorded by the participant registration workflow.', 'leagueflow' ), array( 'status' => 403 ) );
+		}
+		$key = 'lf_player' === $type ? 'lf_user_id' : 'lf_manager_user_ids';
+		if ( ! array_key_exists( $key, $meta ) ) {
+			return $prepared_post;
+		}
+		$forbidden = new \WP_Error( 'leagueflow_identity_forbidden', __( 'Only authorized staff may assign eligible portal accounts.', 'leagueflow' ), array( 'status' => 403 ) );
+		if ( ! can_manage_player_accounts() ) {
+			return $forbidden;
+		}
+		$post_id = absint( $prepared_post->ID ?? 0 );
+		if ( 'lf_player' === $type ) {
+			if ( null !== $meta[ $key ] && ! $this->is_rest_user_id( $meta[ $key ] ) ) {
+				return new \WP_Error( 'leagueflow_invalid_identity', __( 'An account ID must be a non-negative integer.', 'leagueflow' ), array( 'status' => 400 ) );
+			}
+			$new_id = null === $meta[ $key ] ? 0 : absint( $meta[ $key ] );
+			$old_id = (int) get_post_meta( $post_id, $key, true );
+			if ( $new_id !== $old_id && ( ( $new_id && ! can_link_player_account( $new_id ) ) || ( $old_id && ( ! current_user_can( 'edit_user', $old_id ) || ! current_user_can( 'promote_user', $old_id ) ) ) ) ) {
+				return $forbidden;
+			}
+		} else {
+			$raw_ids = null === $meta[ $key ] ? array() : $meta[ $key ];
+			if ( ! is_array( $raw_ids ) ) {
+				return new \WP_Error( 'leagueflow_invalid_identity', __( 'Team managers must be a list of account IDs.', 'leagueflow' ), array( 'status' => 400 ) );
+			}
+			foreach ( $raw_ids as $id ) {
+				if ( ! $this->is_rest_user_id( $id ) ) {
+					return new \WP_Error( 'leagueflow_invalid_identity', __( 'An account ID must be a non-negative integer.', 'leagueflow' ), array( 'status' => 400 ) );
+				}
+			}
+			$new_ids = sanitize_user_id_list( $raw_ids );
+			$old_ids = get_team_manager_user_ids( $post_id );
+			foreach ( array_diff( $new_ids, $old_ids ) as $id ) {
+				if ( ! can_link_player_account( $id ) ) { return $forbidden; }
+			}
+			foreach ( array_diff( $old_ids, $new_ids ) as $id ) {
+				if ( ! current_user_can( 'edit_user', $id ) || ! current_user_can( 'promote_user', $id ) ) { return $forbidden; }
+			}
+		}
+		return $prepared_post;
+	}
+
+	/** Do not let absint() turn a negative or malformed raw identity into a valid link. */
+	protected function is_rest_user_id( $value ) {
+		return ( is_int( $value ) && $value >= 0 ) || ( is_string( $value ) && (bool) preg_match( '/^\d+$/D', $value ) );
 	}
 
 	/** Exclude private directories from the general REST search endpoint as well. */
@@ -213,17 +287,21 @@ class Post_Types {
 				return current_user_can( 'edit_posts' );
 			},
 		);
+		$account_args = array_merge(
+			$shared_args,
+			array( 'auth_callback' => static function() { return can_manage_player_accounts(); } )
+		);
 
 		$this->register_string_meta( 'lf_team', 'lf_short_name', $shared_args );
 		$this->register_string_meta( 'lf_team', 'lf_city', $shared_args );
 		$this->register_string_meta( 'lf_team', 'lf_coach', $shared_args );
 		$this->register_integer_meta( 'lf_team', 'lf_founded_year', $shared_args );
-		$this->register_user_ids_meta( 'lf_team', 'lf_manager_user_ids', $shared_args );
+		$this->register_user_ids_meta( 'lf_team', 'lf_manager_user_ids', $account_args );
 		$this->register_signed_integer_meta( 'lf_team', 'lf_points_adjustment', $shared_args );
 		$this->register_string_meta( 'lf_team', 'lf_adjustment_note', $shared_args );
 
 		$this->register_email_meta( 'lf_player', 'lf_email', $shared_args );
-		$this->register_integer_meta( 'lf_player', 'lf_user_id', $shared_args );
+		$this->register_integer_meta( 'lf_player', 'lf_user_id', $account_args );
 		$this->register_integer_meta( 'lf_player', 'lf_jersey_number', $shared_args );
 		$this->register_string_meta( 'lf_player', 'lf_position', $shared_args );
 		$this->register_integer_meta( 'lf_player', 'lf_age', $shared_args );

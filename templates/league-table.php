@@ -8,24 +8,25 @@
  */
 
 defined( 'ABSPATH' ) || exit;
+$show_draws = (bool) array_filter( $rows, static function( $row ) { return ! empty( $row['draws'] ); } );
 ?>
-<div class="leagueflow leagueflow-table-wrap">
+<div class="leagueflow leagueflow-table-wrap" role="region" tabindex="0" aria-label="<?php esc_attr_e( 'League standings', 'leagueflow' ); ?>">
 	<?php if ( empty( $rows ) ) : ?>
-		<p><?php esc_html_e( 'No standings are available yet.', 'leagueflow' ); ?></p>
+		<p><?php esc_html_e( 'No teams or completed league results match this sport, season and level yet.', 'leagueflow' ); ?></p>
 	<?php else : ?>
-		<table class="leagueflow-table">
+		<table class="leagueflow-table" aria-label="<?php esc_attr_e( 'League standings', 'leagueflow' ); ?>">
 			<thead>
 				<tr>
-					<th><?php esc_html_e( '#', 'leagueflow' ); ?></th>
-					<th><?php esc_html_e( 'Team', 'leagueflow' ); ?></th>
-					<th><?php esc_html_e( 'P', 'leagueflow' ); ?></th>
-					<th><?php esc_html_e( 'W', 'leagueflow' ); ?></th>
-					<th><?php esc_html_e( 'D', 'leagueflow' ); ?></th>
-					<th><?php esc_html_e( 'L', 'leagueflow' ); ?></th>
-					<th><?php echo esc_html( $table_labels['for'] ); ?></th>
-					<th><?php echo esc_html( $table_labels['against'] ); ?></th>
-					<th><?php echo esc_html( $table_labels['difference'] ); ?></th>
-					<th><?php esc_html_e( 'Pts', 'leagueflow' ); ?></th>
+					<th scope="col" aria-label="<?php esc_attr_e( 'Position', 'leagueflow' ); ?>"><?php esc_html_e( '#', 'leagueflow' ); ?></th>
+					<th scope="col"><?php esc_html_e( 'Team', 'leagueflow' ); ?></th>
+					<th scope="col" aria-label="<?php esc_attr_e( 'Played', 'leagueflow' ); ?>"><?php esc_html_e( 'P', 'leagueflow' ); ?></th>
+					<th scope="col" aria-label="<?php esc_attr_e( 'Won', 'leagueflow' ); ?>"><?php esc_html_e( 'W', 'leagueflow' ); ?></th>
+					<?php if ( $show_draws ) : ?><th scope="col" aria-label="<?php esc_attr_e( 'Drawn (tied)', 'leagueflow' ); ?>"><?php esc_html_e( 'D', 'leagueflow' ); ?></th><?php endif; ?>
+					<th scope="col" aria-label="<?php esc_attr_e( 'Lost', 'leagueflow' ); ?>"><?php esc_html_e( 'L', 'leagueflow' ); ?></th>
+					<th scope="col"><?php echo esc_html( $table_labels['for'] ); ?></th>
+					<th scope="col"><?php echo esc_html( $table_labels['against'] ); ?></th>
+					<th scope="col"><?php echo esc_html( $table_labels['difference'] ); ?></th>
+					<th scope="col" aria-label="<?php esc_attr_e( 'Table points', 'leagueflow' ); ?>"><?php esc_html_e( 'Pts', 'leagueflow' ); ?></th>
 				</tr>
 			</thead>
 			<tbody>
@@ -44,7 +45,7 @@ defined( 'ABSPATH' ) || exit;
 						</td>
 						<td><?php echo esc_html( (string) $row['played'] ); ?></td>
 						<td><?php echo esc_html( (string) $row['wins'] ); ?></td>
-						<td><?php echo esc_html( (string) $row['draws'] ); ?></td>
+						<?php if ( $show_draws ) : ?><td><?php echo esc_html( (string) $row['draws'] ); ?></td><?php endif; ?>
 						<td><?php echo esc_html( (string) $row['losses'] ); ?></td>
 						<td><?php echo esc_html( (string) $row['goals_for'] ); ?></td>
 						<td><?php echo esc_html( (string) $row['goals_against'] ); ?></td>
@@ -59,5 +60,8 @@ defined( 'ABSPATH' ) || exit;
 				<?php endforeach; ?>
 			</tbody>
 		</table>
+		<?php if ( ! array_sum( array_column( $rows, 'played' ) ) ) : ?>
+			<p><?php esc_html_e( 'Teams are listed; results will appear after league matches are marked Finished and published.', 'leagueflow' ); ?></p>
+		<?php endif; ?>
 	<?php endif; ?>
 </div>

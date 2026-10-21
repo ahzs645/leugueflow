@@ -63,7 +63,7 @@ class Assets {
 		wp_register_script(
 			'leagueflow-blocks',
 			LEAGUEFLOW_URL . 'assets/js/blocks.js',
-			array( 'wp-blocks', 'wp-components', 'wp-element', 'wp-i18n', 'wp-block-editor', 'wp-server-side-render' ),
+			array( 'wp-blocks', 'wp-components', 'wp-element', 'wp-i18n', 'wp-block-editor', 'wp-server-side-render', 'leagueflow-calendar' ),
 			$this->asset_version( 'assets/js/blocks.js' ),
 			true
 		);

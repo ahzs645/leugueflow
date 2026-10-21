@@ -279,6 +279,10 @@ class Knockout_Service {
 	 * @return int
 	 */
 	public function advance_winner( $match_id ) {
+		if ( ! get_post_meta( $match_id, 'lf_is_knockout', true ) || 'finished' !== get_post_meta( $match_id, 'lf_status', true ) ) {
+			return 0;
+		}
+
 		$winner_team_id = $this->determine_winner_team_id( $match_id );
 		$next_match_id  = (int) get_post_meta( $match_id, 'lf_next_match_id', true );
 		$slot           = get_post_meta( $match_id, 'lf_next_match_slot', true );
@@ -287,28 +291,65 @@ class Knockout_Service {
 			return 0;
 		}
 
-		if ( ! current_user_can( 'edit_post', $match_id ) || ! current_user_can( 'edit_post', $next_match_id ) ) { return 0; }
-		$slot = in_array( $slot, array( 'home', 'away' ), true ) ? $slot : 'home';
-		update_post_meta( $next_match_id, 'lf_' . $slot . '_team_id', $winner_team_id );
+		// Result entry and bracket advancement change the same match state.
+		$lock = db_lock_name( 'result', (string) $next_match_id );
+		if ( ! acquire_db_lock( $lock, 0 ) ) {
+			return 0;
+		}
 
-		$home_team_id = (int) get_post_meta( $next_match_id, 'lf_home_team_id', true );
-		$away_team_id = (int) get_post_meta( $next_match_id, 'lf_away_team_id', true );
-		$datetime     = (string) get_post_meta( $next_match_id, 'lf_match_datetime', true );
+		try {
+			// The graph check above primed metadata caches before the lock. A
+			// concurrent result or feeder may have changed either record since then.
+			clean_post_cache( $match_id );
+			clean_post_cache( $next_match_id );
+			if ( ! current_user_can( 'edit_post', $match_id ) || ! current_user_can( 'edit_post', $next_match_id ) ) { return 0; }
+			if ( ! get_post_meta( $match_id, 'lf_is_knockout', true )
+				|| $next_match_id !== (int) get_post_meta( $match_id, 'lf_next_match_id', true )
+				|| ! $this->can_advance_to( $match_id, $next_match_id ) ) { return 0; }
+			$winner_team_id = $this->determine_winner_team_id( $match_id );
+			if ( ! $winner_team_id ) { return 0; }
+			$slot       = get_post_meta( $match_id, 'lf_next_match_slot', true );
+			$slot       = in_array( $slot, array( 'home', 'away' ), true ) ? $slot : 'home';
+			$other_slot = 'home' === $slot ? 'away' : 'home';
+			$current    = (int) get_post_meta( $next_match_id, 'lf_' . $slot . '_team_id', true );
+			$origin     = (int) get_post_meta( $next_match_id, '_lf_' . $slot . '_advanced_from', true );
+			$next_state = (string) get_post_meta( $next_match_id, 'lf_status', true );
 
-		if ( ! current_user_can( 'edit_post', $match_id ) || ! current_user_can( 'edit_post', $next_match_id ) ) { return 0; }
+			// A corrected semifinal may update an unplayed final fed by that
+			// semifinal, but must not replace a manually chosen opponent or a
+			// participant in a match that has already started. Staff resolve those
+			// cases explicitly instead of silently corrupting later results.
+			if ( ! in_array( $next_state, array( '', 'scheduled', 'postponed' ), true )
+				|| '' !== (string) get_post_meta( $next_match_id, 'lf_home_score', true )
+				|| '' !== (string) get_post_meta( $next_match_id, 'lf_away_score', true )
+				|| ( $current && $current !== $winner_team_id && $origin !== (int) $match_id )
+				|| ( $origin && $origin !== (int) $match_id )
+				|| $winner_team_id === (int) get_post_meta( $next_match_id, 'lf_' . $other_slot . '_team_id', true ) ) {
+				return 0;
+			}
 
-		remove_action( 'save_post_lf_match', array( $this, 'handle_match_save' ), 30 );
+			update_post_meta( $next_match_id, 'lf_' . $slot . '_team_id', $winner_team_id );
+			update_post_meta( $next_match_id, '_lf_' . $slot . '_advanced_from', (int) $match_id );
+			$home_team_id = (int) get_post_meta( $next_match_id, 'lf_home_team_id', true );
+			$away_team_id = (int) get_post_meta( $next_match_id, 'lf_away_team_id', true );
+			$datetime     = (string) get_post_meta( $next_match_id, 'lf_match_datetime', true );
 
-		wp_update_post(
-			array(
-				'ID'         => $next_match_id,
-				'post_title' => build_match_title( $home_team_id, $away_team_id, $datetime ),
-			)
-		);
-
-		add_action( 'save_post_lf_match', array( $this, 'handle_match_save' ), 30, 3 );
-
-		return $winner_team_id;
+			if ( ! current_user_can( 'edit_post', $match_id ) || ! current_user_can( 'edit_post', $next_match_id ) ) { return 0; }
+			remove_action( 'save_post_lf_match', array( $this, 'handle_match_save' ), 30 );
+			try {
+				wp_update_post(
+					array(
+						'ID'         => $next_match_id,
+						'post_title' => build_match_title( $home_team_id, $away_team_id, $datetime ),
+					)
+				);
+			} finally {
+				add_action( 'save_post_lf_match', array( $this, 'handle_match_save' ), 30, 3 );
+			}
+			return $winner_team_id;
+		} finally {
+			release_db_lock( $lock );
+		}
 	}
 
 	/** Validate the whole referenced graph before permitting a cross-match write. */
@@ -318,7 +359,7 @@ class Knockout_Service {
 		$previous = (int) $match_id;
 		$node = (int) $next_match_id;
 		for ( $hop = 0; $node && $hop < 100; ++$hop ) {
-			if ( isset( $visited[$node] ) || 'lf_match' !== get_post_type( $node ) || ! current_user_can( 'edit_post', $node ) ) { return false; }
+			if ( isset( $visited[$node] ) || 'lf_match' !== get_post_type( $node ) || ! get_post_meta( $node, 'lf_is_knockout', true ) || ! current_user_can( 'edit_post', $node ) ) { return false; }
 			foreach ( array( 'lf_sport', 'lf_league_level', 'lf_competition', 'lf_season' ) as $taxonomy ) {
 				$source = $context[$taxonomy] ?? wp_get_object_terms( $match_id, $taxonomy, array( 'fields' => 'ids' ) );
 				$target = wp_get_object_terms( $node, $taxonomy, array( 'fields' => 'ids' ) );
@@ -342,9 +383,17 @@ class Knockout_Service {
 	 * @return int
 	 */
 	public function determine_winner_team_id( $match_id ) {
+		if ( 'lf_match' !== get_post_type( $match_id ) || 'finished' !== get_post_meta( $match_id, 'lf_status', true ) ) {
+			return 0;
+		}
+
 		$home_team_id = (int) get_post_meta( $match_id, 'lf_home_team_id', true );
 		$away_team_id = (int) get_post_meta( $match_id, 'lf_away_team_id', true );
 		$winner_id    = (int) get_post_meta( $match_id, 'lf_winner_team_id', true );
+
+		if ( $home_team_id === $away_team_id || ( $home_team_id && 'lf_team' !== get_post_type( $home_team_id ) ) || ( $away_team_id && 'lf_team' !== get_post_type( $away_team_id ) ) ) {
+			return 0;
+		}
 
 		if ( $winner_id && in_array( $winner_id, array( $home_team_id, $away_team_id ), true ) ) {
 			return $winner_id;
@@ -364,14 +413,14 @@ class Knockout_Service {
 			return 0;
 		}
 
-		if ( 'finished' !== get_post_meta( $match_id, 'lf_status', true ) ) {
+		if ( ! $home_team_id || ! $away_team_id ) {
 			return 0;
 		}
 
 		$home_score = get_post_meta( $match_id, 'lf_home_score', true );
 		$away_score = get_post_meta( $match_id, 'lf_away_score', true );
 
-		if ( ! has_score( $home_score ) || ! has_score( $away_score ) ) {
+		if ( ! Match_Status::is_valid_score( $home_score ) || ! Match_Status::is_valid_score( $away_score ) ) {
 			return 0;
 		}
 

@@ -118,8 +118,9 @@ function lfa_on_next_lock( callable $callback ) {
 }
 /** A second database connection holding a named lock (a concurrent process). */
 function lfa_hold_lock( $name ) {
-	list( $host, $port ) = array_pad( explode( ':', DB_HOST ), 2, 3306 );
-	$other = mysqli_connect( $host, DB_USER, DB_PASSWORD, DB_NAME, (int) $port );
+	global $wpdb;
+	list( $host, $port, $socket ) = $wpdb->parse_db_host( DB_HOST );
+	$other = mysqli_connect( $host, DB_USER, DB_PASSWORD, DB_NAME, (int) ( $port ?: 3306 ), $socket ?: null );
 	if ( ! $other ) {
 		throw new RuntimeException( 'Second database connection failed.' );
 	}
@@ -802,8 +803,8 @@ lfa_check( 'leagueflow_request_state' === $service->apply_action( $r_f6s, 'appro
 $wpdb->query( $wpdb->prepare( "UPDATE $wpdb->postmeta SET meta_value = 'declined' WHERE post_id = %d AND meta_key = 'lf_request_status'", $r_f6s ) );
 lfa_check( is_wp_error( $service->apply_action( $r_f6s, 'approve' ) ) && ! \LeagueFlow\player_has_team( $p_f6s, $teams[1] ), 'ADM-09 F6: a decision stored by another process (stale cache) is re-read and not overridden' );
 $r_f6c = $req( $p_f6s, $teams[1] );
-list( $db_host, $db_port ) = array_pad( explode( ':', DB_HOST ), 2, 3306 );
-$other = mysqli_connect( $db_host, DB_USER, DB_PASSWORD, DB_NAME, (int) $db_port );
+list( $db_host, $db_port, $db_socket ) = $wpdb->parse_db_host( DB_HOST );
+$other = mysqli_connect( $db_host, DB_USER, DB_PASSWORD, DB_NAME, (int) ( $db_port ?: 3306 ), $db_socket ?: null );
 if ( $other ) {
 	mysqli_query( $other, "SELECT GET_LOCK('" . mysqli_real_escape_string( $other, $service->lock_name( $r_f6c ) ) . "', 0)" );
 	add_filter( 'leagueflow_request_lock_timeout', '__return_zero' );

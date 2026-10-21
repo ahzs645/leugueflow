@@ -13,8 +13,10 @@
 ### Content Model
 
 - `lf_team` stores club identity and public team pages.
-- `lf_player` stores roster entries and belongs to one team through post meta.
+- `lf_player` stores a participant identity with team memberships across sports. Membership helpers keep the primary legacy team and per-team details consistent.
 - `lf_match` stores fixtures, results, statuses, and knockout metadata.
+- `lf_calendar_event` stores non-match activities such as drop-ins, clinics and venue closures.
+- `lf_join_request` stores team/placement requests; its service owns decisions, locks and history.
 - `lf_sport` is the shared taxonomy that modularizes teams, players, and matches without fragmenting the plugin into separate codebases.
 - `lf_competition` and `lf_season` are taxonomies used to filter teams and matches.
 - `lf_competition` and `lf_season` also store `lf_sport_slug` term meta so context filters and blocks stay aligned with the right sport.
@@ -27,10 +29,13 @@
 - `Sports_Manager` owns built-in sport definitions, enabled sport modules, menu icons, sport-specific match fields, and the legacy soccer-to-multi-sport migration.
 - `Field_Availability_Manager` stores site field availability windows, generates open match slots, avoids venue and team conflicts, and links auto-scheduled matches back to the availability window used.
 - `Seeder` generates demo data and sample pages.
+- `Registration_Consent` validates current personal acknowledgements and appends private evidence snapshots to the player record.
+- `Referee` provides assigned-match roster access and optional final-score submission through a dedicated role. Result writes use a shared match lock, stale-state checks and a verified transaction.
 
 ### Admin
 
 - `Admin` builds the menu, metaboxes, list-table enhancements, sport filters, settings page integration, demo data action, and validation notices.
+- `Admin_Guide` provides staff instructions for seasons, leagues, results, drop-ins, referees and documents.
 - `Settings` owns the points system, slugs, display defaults, tie-breakers, and uninstall cleanup option.
 - Sport-specific top-level menus are generated at runtime for each enabled sport. The plugin still keeps one shared Teams, Players, and Matches data model underneath.
 
@@ -44,15 +49,16 @@
 
 ### Standings Update Flow
 
-1. Admin marks a match as `finished`.
-2. Match score meta is saved.
-3. `Standings_Service` recalculates the table whenever the table is rendered, optionally scoped to the requested sport.
+1. Staff explicitly finalize a result, or an assigned and enabled referee submits it.
+2. Scores, outcome and match context are validated and saved before the `finished` transition.
+3. `Standings_Service` derives tables from published, finished non-knockout matches in the selected context. Missing dates do not hide valid results. Each match uses its competition's points rules.
+4. Staff diagnostics explain excluded incomplete, unfinished, unpublished, knockout or invalid-team results.
 
 ### Knockout Advancement Flow
 
 1. Admin marks a knockout match as `finished`.
 2. `Knockout_Service` determines the winner from override or score.
-3. The winner is inserted into the configured home or away slot of the next match.
+3. Under the target result lock, permissions, graph context and current state are checked again. A valid winner can fill only an unstarted target with a compatible slot. Feeder provenance prevents overwriting another feeder or a manual assignment.
 
 ### Field Availability Scheduling Flow
 
@@ -68,6 +74,13 @@
 2. The block inspector provides native controls for sport, team, competition, season, or match selection.
 3. Preview uses server-side rendering so editor output stays aligned with frontend output.
 
+### Calendar Range Flow
+
+1. The block renderer supplies public matches/events overlapping its initial date range.
+2. Calendar navigation and filters request that range from the bounded calendar REST endpoint. Month/week/day views complete pages serially; list view uses explicit load-more paging.
+3. Requests are cancelled or ignored when superseded. Loading, incomplete and failed requests are presented distinctly from a verified empty range.
+4. Event and saved match durations are considered for overlap, including entries that began before the selected range. Public editor preview follows the same visibility policy.
+
 ### Sport Setup Flow
 
 1. Admin opens `LeagueFlow > Sports`.
@@ -80,4 +93,4 @@
 - A future release can add manual standings overrides through a dedicated admin page without changing the derived table pipeline.
 - Match event structures can move to richer arrays or custom tables later if line-by-line text becomes limiting.
 - New sports can be introduced by extending `Sports_Manager::get_definitions()` and adding sport-specific labels, match fields, and an icon without redesigning the rest of the plugin.
-- Competition-specific rule sets can be introduced by moving settings from global options to term meta.
+- Competition rule overrides already exist in term metadata. A future migration should scope team point adjustments to season/competition and record who applied each adjustment.
