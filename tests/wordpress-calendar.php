@@ -107,8 +107,18 @@ try {
 	$legacy_duration = $make_match( '2027-01-31 23:00', array( 'lf_field_availability_id' => 'calendar-legacy-duration' ) );
 	$overnight = $renderer->get_calendar_page( $scope + array( 'start_date' => '2027-02-01', 'end_date' => '2027-02-01' ) );
 	lfcal_check( array( $saved_duration, $legacy_duration ) === array_column( $overnight['items'], 'postId' ), 'Range SQL includes saved and legacy-duration matches that continue after midnight.' );
-	lfcal_check( '2027-02-01T01:00:00-08:00' === $overnight['items'][0]['end'], 'Calendar uses the saved two-hour match duration.' );
-	lfcal_check( '2027-02-01T02:00:00-08:00' === $overnight['items'][1]['end'], 'Calendar uses the legacy linked availability duration.' );
+	// Timezone rules can change between the developer and CI tzdata releases.
+	// Assert the exact site-local endpoint and elapsed interval independently,
+	// without assuming Vancouver's UTC offset for a future date.
+	foreach ( array(
+		array( 'end' => '2027-02-01 01:00:00', 'seconds' => 2 * HOUR_IN_SECONDS, 'message' => 'Calendar uses the saved two-hour match duration.' ),
+		array( 'end' => '2027-02-01 02:00:00', 'seconds' => 3 * HOUR_IN_SECONDS, 'message' => 'Calendar uses the legacy linked availability duration.' ),
+	) as $index => $expected ) {
+		$expected_end = ( new DateTimeImmutable( $expected['end'], wp_timezone() ) )->format( DATE_ATOM );
+		$actual = $overnight['items'][ $index ];
+		$elapsed = ( new DateTimeImmutable( $actual['end'] ) )->getTimestamp() - ( new DateTimeImmutable( $actual['start'] ) )->getTimestamp();
+		lfcal_check( $expected_end === $actual['end'] && $expected['seconds'] === $elapsed, sprintf( '%s Expected %s / %d seconds; got %s / %d seconds (timezone %s, tzdata %s).', $expected['message'], $expected_end, $expected['seconds'], $actual['end'], $elapsed, wp_timezone_string(), timezone_version_get() ) );
+	}
 	WP_CLI::success( 'Calendar ranges, Nov/Dec visibility, seconds, spanning events, paging, public scope and block contracts: ' . $GLOBALS['lfcal_checks'] . ' assertions.' );
 } finally {
 	wp_set_current_user( $lfcal_user );
