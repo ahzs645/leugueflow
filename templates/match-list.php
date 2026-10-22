@@ -28,7 +28,8 @@ defined( 'ABSPATH' ) || exit;
 						// Inline children stay on one line: block-template rendering
 						// autop-converts stray newlines into <br> grid items.
 						?>
-						<div class="leagueflow-match-row__teams"><span><?php echo esc_html( $match['home_team'] ); ?></span><?php if ( ! empty( $match['scoreline'] ) ) : ?><strong class="leagueflow-match-row__score"><?php echo esc_html( $match['scoreline'] ); ?></strong><?php else : ?><span class="leagueflow-match-row__score"><?php esc_html_e( 'vs', 'leagueflow' ); ?></span><?php endif; ?><span><?php echo esc_html( $match['away_team'] ); ?></span></div>
+						<div class="leagueflow-match-row__teams"><span><?php echo esc_html( $match['home_team'] ); ?></span><?php if ( ! empty( $match['scoreline'] ) ) : ?><strong class="leagueflow-match-row__score"><?php echo esc_html( $match['scoreline'] ); ?></strong><?php elseif ( ! empty( $match['result_label'] ) ) : ?><span class="leagueflow-match-row__score">&mdash;</span><?php else : ?><span class="leagueflow-match-row__score"><?php esc_html_e( 'vs', 'leagueflow' ); ?></span><?php endif; ?><span><?php echo esc_html( $match['away_team'] ); ?></span></div>
+						<?php if ( ! empty( $match['result_label'] ) ) : ?><p class="leagueflow-match-row__result"><?php echo esc_html( $match['result_label'] ); ?></p><?php endif; ?>
 						<?php if ( ! empty( $match['venue'] ) ) : ?><p class="leagueflow-match-row__venue"><?php echo esc_html( $match['venue'] ); ?></p><?php endif; ?>
 						<p><a href="<?php echo esc_url( $match['permalink'] ); ?>"><?php esc_html_e( 'View match', 'leagueflow' ); ?></a></p>
 					</div>

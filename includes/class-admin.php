@@ -263,12 +263,9 @@ class Admin {
 	/**
 	 * Register the single LeagueFlow admin menu.
 	 *
-	 * One top-level menu holds every screen; the sport (and level/season) is an
-	 * explicit context carried in `lf_sport` and shown in the context bar, not a
-	 * separate sidebar menu per sport. WordPress supports one submenu level, so
-	 * sport switching happens on the screen itself. The pre-1.0.4 per-sport page
-	 * slugs stay registered as hidden aliases that redirect to the same screen
-	 * with the sport context, so bookmarks and e-mailed links keep working.
+	 * The main menu holds every screen. Enabled sports link to these shared
+	 * screens with explicit sport context, rather than registering competing
+	 * copies of each page. Older per-sport page slugs remain hidden aliases.
 	 *
 	 * @return void
 	 */
@@ -320,13 +317,25 @@ class Admin {
 			add_submenu_page( 'leagueflow', $item[0], $item[1], $item[2], $item[3], $item[4] );
 		}
 
-		// Each enabled sport opens the same screens with an explicit sport context.
+		// Choose sport shortcuts by identity, not by array offsets: inserting a
+		// shared menu item must not silently remove Seasons or another shortcut.
+		$sport_screens = array(
+			Admin_Setup::PAGE, 'edit.php?post_type=lf_team', 'edit.php?post_type=lf_player',
+			'leagueflow-requests', 'edit.php?post_type=lf_match', 'leagueflow-fixtures',
+			'leagueflow-fields', 'edit.php?post_type=lf_calendar_event',
+			'leagueflow-standings', 'leagueflow-brackets',
+			'edit-tags.php?taxonomy=lf_competition&post_type=lf_match',
+			'edit-tags.php?taxonomy=lf_season&post_type=lf_match',
+		);
 		$position = 26;
 		foreach ( $this->sports_manager->get_enabled_sports() as $sport_slug => $sport ) {
 			$parent = 'leagueflow-sport-' . $sport_slug;
 			add_menu_page( $sport['label'], $sport['menu_label'], 'edit_posts', $parent, array( $this, 'render_sport_dashboard_page' ), $this->sports_manager->get_menu_icon_data_uri( $sport_slug ), $position++ );
 			add_submenu_page( $parent, __( 'Overview', 'leagueflow' ), __( 'Overview', 'leagueflow' ), 'edit_posts', $parent, array( $this, 'render_sport_dashboard_page' ) );
-			foreach ( array_slice( $items, 1, 12 ) as $item ) {
+			foreach ( $items as $item ) {
+				if ( ! in_array( $item[3], $sport_screens, true ) ) {
+					continue;
+				}
 				$url = false !== strpos( $item[3], '.php?' ) ? $item[3] : 'admin.php?page=' . $item[3];
 				$url = add_query_arg( 'lf_sport', $sport_slug, $url );
 				// The shared inbox owns the global pending badge; sport links must not repeat it.
@@ -400,12 +409,21 @@ class Admin {
 	public function get_context_sport_slug() {
 		$slug = $this->get_requested_sport_slug();
 
-		if ( '' === $slug && in_array( $this->get_current_admin_file(), array( 'post.php' ), true ) ) {
+		if ( 'post.php' === $this->get_current_admin_file() ) {
 			$post_id = absint( wp_unslash( $_GET['post'] ?? 0 ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-			$slug    = $post_id ? get_post_primary_term_slug( $post_id, 'lf_sport' ) : '';
+			$stored  = $post_id ? get_post_primary_term_slug( $post_id, 'lf_sport' ) : '';
 
-			if ( '' === $slug && 'lf_join_request' === get_post_type( $post_id ) ) {
-				$slug = sanitize_key( (string) get_post_meta( $post_id, 'lf_sport_slug', true ) );
+			if ( '' === $stored && 'lf_join_request' === get_post_type( $post_id ) ) {
+				$stored = sanitize_key( (string) get_post_meta( $post_id, 'lf_sport_slug', true ) );
+			}
+
+			if ( $stored ) {
+				$slug = $stored;
+			}
+		} elseif ( 'term.php' === $this->get_current_admin_file() && in_array( $this->get_current_admin_taxonomy(), array( 'lf_competition', 'lf_season' ), true ) ) {
+			$term_id = absint( $_GET['tag_ID'] ?? 0 ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+			if ( $term_id ) {
+				$slug = sanitize_key( (string) get_term_meta( $term_id, 'lf_sport_slug', true ) );
 			}
 		}
 
@@ -433,6 +451,7 @@ class Admin {
 			'leagueflow-sports'    => __( 'Sports', 'leagueflow' ),
 			'leagueflow-utilities' => __( 'Utilities', 'leagueflow' ),
 			'leagueflow-settings'  => __( 'Settings', 'leagueflow' ),
+			'leagueflow-guide'     => __( 'Staff guide', 'leagueflow' ),
 		);
 
 		if ( $page ) {
@@ -480,8 +499,8 @@ class Admin {
 		$label     = $sport ? $this->sports_manager->get_definition( $sport )['label'] : __( 'All sports', 'leagueflow' );
 		$level     = $this->get_requested_league_level_slug();
 		$level     = $level ? get_term_by( 'slug', $level, 'lf_league_level' ) : null;
-		$editing   = in_array( $file, array( 'post.php', 'post-new.php' ), true );
-		$global    = in_array( $page, array( 'leagueflow-sports', 'leagueflow-utilities', 'leagueflow-settings' ), true ) || 'lf_league_level' === $taxonomy;
+		$editing   = in_array( $file, array( 'post.php', 'post-new.php', 'term.php' ), true );
+		$global    = in_array( $page, array( 'leagueflow-sports', 'leagueflow-utilities', 'leagueflow-settings', 'leagueflow-guide' ), true ) || 'lf_league_level' === $taxonomy;
 		$overview  = add_query_arg( array_filter( array( 'page' => 'leagueflow', 'lf_sport' => $sport ) ), admin_url( 'admin.php' ) );
 		?>
 		<nav class="leagueflow-context" aria-label="<?php esc_attr_e( 'LeagueFlow location and sport', 'leagueflow' ); ?>">
@@ -497,11 +516,17 @@ class Admin {
 			</ol>
 			<?php if ( 'lf_league_level' === $taxonomy ) : ?>
 				<p class="leagueflow-context__note"><?php esc_html_e( 'League levels are shared by every sport. Renaming or deleting one changes it for all sports, and the Count column includes records from every sport.', 'leagueflow' ); ?></p>
+			<?php elseif ( 'term.php' === $file && isset( $this->get_leagueflow_taxonomy_submenu_files()[ $taxonomy ] ) ) : ?>
+				<?php
+				$tax_object = get_taxonomy( $taxonomy );
+				$back = add_query_arg( array_filter( array( 'taxonomy' => $taxonomy, 'post_type' => 'lf_match', 'lf_sport' => $sport ) ), admin_url( 'edit-tags.php' ) );
+				?>
+				<p class="leagueflow-context__back"><a href="<?php echo esc_url( $back ); ?>">&larr; <?php echo esc_html( sprintf( __( 'Back to %1$s (%2$s)', 'leagueflow' ), $tax_object->labels->name, $label ) ); ?></a></p>
 			<?php elseif ( $editing && in_array( $post_type, $this->get_leagueflow_admin_post_types(), true ) ) : ?>
 				<?php
 				$type = get_post_type_object( $post_type );
 				$back = 'lf_join_request' === $post_type
-					? add_query_arg( array( 'page' => Admin_Requests::PAGE ), admin_url( 'admin.php' ) )
+					? add_query_arg( array_filter( array( 'page' => Admin_Requests::PAGE, 'lf_sport' => $sport ) ), admin_url( 'admin.php' ) )
 					: add_query_arg( array_filter( array( 'post_type' => $post_type, 'lf_sport' => $sport ) ), admin_url( 'edit.php' ) );
 				?>
 				<p class="leagueflow-context__back"><a href="<?php echo esc_url( $back ); ?>">&larr; <?php echo esc_html( sprintf( /* translators: 1: list name, 2: sport or "All sports" */ __( 'Back to %1$s (%2$s)', 'leagueflow' ), $type ? $type->labels->name : '', $label ) ); ?></a></p>
@@ -749,7 +774,7 @@ class Admin {
 		?>
 		<div class="wrap leagueflow-admin-page">
 			<h1><?php esc_html_e( 'Sports Setup', 'leagueflow' ); ?></h1>
-			<p><?php esc_html_e( 'Enable the sports you want LeagueFlow to support. Enabled sports get their own left-hand admin menu with sport-specific dashboards, icons, and match detail fields.', 'leagueflow' ); ?></p>
+			<p><?php esc_html_e( 'Choose the sports you run, then configure each sport below. Enabled sports appear in the admin shortcuts and sport selector. Disabling a sport keeps its teams, players, fixtures, results and scoring rules.', 'leagueflow' ); ?></p>
 
 			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 				<input type="hidden" name="action" value="leagueflow_save_sports" />
@@ -778,8 +803,35 @@ class Admin {
 					<?php endforeach; ?>
 				</div>
 
+				<p class="description"><?php esc_html_e( 'Keep at least one sport enabled. These modules provide score labels and optional match notes; your league decides points, match format and tie-breakers.', 'leagueflow' ); ?></p>
 				<p><?php submit_button( __( 'Save Sports', 'leagueflow' ), 'primary', 'submit', false ); ?></p>
 			</form>
+			<section class="leagueflow-admin-card" aria-labelledby="leagueflow-sport-setup-title">
+				<h2 id="leagueflow-sport-setup-title"><?php esc_html_e( 'Set up each enabled sport', 'leagueflow' ); ?></h2>
+				<p><?php esc_html_e( 'Review scoring, create competitions and seasons, then add teams in a league level. Setup check links to any missing assignments and venue availability.', 'leagueflow' ); ?></p>
+				<div class="leagueflow-table-scroll" role="region" tabindex="0" aria-label="<?php esc_attr_e( 'Sport setup summary', 'leagueflow' ); ?>">
+					<table class="widefat striped">
+						<thead><tr><th scope="col"><?php esc_html_e( 'Sport', 'leagueflow' ); ?></th><th scope="col"><?php esc_html_e( 'Current season', 'leagueflow' ); ?></th><th scope="col"><?php esc_html_e( 'Scoring', 'leagueflow' ); ?></th><th scope="col"><?php esc_html_e( 'Next steps', 'leagueflow' ); ?></th></tr></thead>
+						<tbody>
+						<?php foreach ( $this->sports_manager->get_enabled_sports() as $slug => $sport ) : ?>
+							<?php
+							$season_id = get_current_season_id( $slug );
+							$season = $season_id ? get_term( $season_id, 'lf_season' ) : null;
+							$rules = get_effective_rules( $slug )['values'];
+							$setup_url = add_query_arg( array( 'page' => 'leagueflow-setup', 'lf_sport' => $slug ), admin_url( 'admin.php' ) );
+							$rules_url = add_query_arg( array( 'page' => 'leagueflow-settings', 'lf_sport' => $slug, 'rules_scope' => 'sport:' . $slug ), admin_url( 'admin.php' ) ) . '#leagueflow-rule-overrides';
+							?>
+							<tr>
+								<th scope="row"><?php echo esc_html( $sport['label'] ); ?><br /><span class="description"><?php echo esc_html( $sport['score_label'] ); ?></span></th>
+								<td><?php echo esc_html( $season instanceof \WP_Term ? $season->name : __( 'Not set — all seasons', 'leagueflow' ) ); ?><br /><a href="<?php echo esc_url( add_query_arg( array( 'taxonomy' => 'lf_season', 'post_type' => 'lf_match', 'lf_sport' => $slug ), admin_url( 'edit-tags.php' ) ) ); ?>"><?php esc_html_e( 'Manage seasons', 'leagueflow' ); ?></a></td>
+								<td><?php echo esc_html( sprintf( /* translators: 1: win points, 2: draw points, 3: loss points */ __( 'Win %1$d · Draw %2$d · Loss %3$d', 'leagueflow' ), $rules['points_win'], $rules['points_draw'], $rules['points_loss'] ) ); ?><br /><a href="<?php echo esc_url( $rules_url ); ?>"><?php esc_html_e( 'Review scoring rules', 'leagueflow' ); ?></a></td>
+								<td><a class="button" href="<?php echo esc_url( $setup_url ); ?>"><?php echo esc_html( sprintf( /* translators: %s: sport */ __( 'Set up %s', 'leagueflow' ), $sport['label'] ) ); ?></a></td>
+							</tr>
+						<?php endforeach; ?>
+						</tbody>
+					</table>
+				</div>
+			</section>
 		</div>
 		<?php
 	}
@@ -1602,6 +1654,9 @@ class Admin {
 				if ( current_user_can( 'edit_post', $id ) ) { $links[] = '<a href="' . esc_url( get_edit_post_link( $id, 'raw' ) ) . '">' . esc_html( get_the_title( $id ) ) . '</a>'; }
 			}
 			if ( $links ) { echo ': ' . implode( ', ', $links ); } // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- links individually escaped.
+			if ( 'scored_not_finished' === $key && $count ) {
+				echo '<p class="description">' . esc_html__( 'Review older scored matches before including them. Save a Scheduled match with both final scores to finish it automatically, or select the reviewed matches in Matches and use Set status to Finished. Live, postponed and cancelled matches require an explicit decision.', 'leagueflow' ) . '</p>';
+			}
 			echo '</li>';
 		}
 		echo '</ul><p>' . esc_html__( 'If a match is not listed, check the selected sport, season, competition and level. Teams and matches must share the intended context.', 'leagueflow' ) . '</p></details>';
@@ -2075,6 +2130,7 @@ class Admin {
 		?>
 		<div class="wrap leagueflow-admin-page leagueflow-settings-page">
 			<h1><?php esc_html_e( 'LeagueFlow Settings', 'leagueflow' ); ?></h1>
+			<p><?php esc_html_e( 'The defaults below apply across the site. Use Scoring by sport and competition to change one sport or competition while keeping the others on their own rules.', 'leagueflow' ); ?></p>
 			<form class="leagueflow-settings-form" method="post" action="options.php">
 				<?php
 				settings_fields( 'leagueflow_settings' );
@@ -2113,6 +2169,7 @@ class Admin {
 		$labels    = ( new Settings() )->get_tie_breaker_labels();
 		$overrides = get_rule_overrides();
 		$scope     = sanitize_text_field( wp_unslash( $_GET['rules_scope'] ?? '' ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$context_sport = $this->get_context_sport_slug();
 		$sources   = array(
 			'global'      => __( 'default', 'leagueflow' ),
 			'sport'       => __( 'sport', 'leagueflow' ),
@@ -2122,19 +2179,20 @@ class Admin {
 			$values = $rules['values'];
 			$source = $rules['source'];
 
+			$with_source = static function ( $key ) use ( $values, $source, $sources ) {
+				return $values[ $key ] . ' (' . $sources[ $source[ $key ] ] . ')';
+			};
 			return sprintf(
-				/* translators: 1: win, 2: draw, 3: loss, 4: tie-breakers, 5: sources */
-				__( 'Win %1$d · Draw %2$d · Loss %3$d · Ties: %4$s', 'leagueflow' ),
-				$values['points_win'],
-				$values['points_draw'],
-				$values['points_loss'],
-				implode( ', ', array_map( static function ( $key ) use ( $labels ) { return $labels[ $key ] ?? $key; }, (array) $values['tie_breakers'] ) )
-			) . ' (' . implode( ', ', array_unique( array_map( static function ( $key ) use ( $sources ) { return $sources[ $key ]; }, $source ) ) ) . ')';
+				/* translators: 1: win and source, 2: draw and source, 3: loss and source, 4: walkover and source, 5: tie-breakers and source */
+				__( 'Win %1$s · Draw %2$s · Loss %3$s · Forfeit score %4$s · Ties: %5$s', 'leagueflow' ),
+				$with_source( 'points_win' ), $with_source( 'points_draw' ), $with_source( 'points_loss' ), $with_source( 'forfeit_score_winner' ),
+				implode( ', ', array_map( static function ( $key ) use ( $labels ) { return $labels[ $key ] ?? $key; }, (array) $values['tie_breakers'] ) ) . ' (' . $sources[ $source['tie_breakers'] ] . ')'
+			);
 		};
 		?>
 		<section class="leagueflow-admin-card leagueflow-rule-overrides" id="leagueflow-rule-overrides" aria-labelledby="leagueflow-rule-overrides-title">
 			<h2 id="leagueflow-rule-overrides-title"><?php esc_html_e( 'Scoring by sport and competition', 'leagueflow' ); ?></h2>
-			<p><?php esc_html_e( 'Every sport uses the default scoring above until you give it its own values. A competition can override its sport in the same way. Saving an override recalculates that scope\'s tables; other sports and competitions are not affected. LeagueFlow does not invent league rules: enter your own league\'s points.', 'leagueflow' ); ?></p>
+			<p><?php esc_html_e( 'Rules follow this order: site defaults → sport → competition. Override only the values that differ; blank values continue to inherit future changes from their parent. Saved changes apply to existing results in that scope as well as new results.', 'leagueflow' ); ?></p>
 			<?php if ( ! empty( $_GET['leagueflow_rules_saved'] ) ) : // phpcs:ignore WordPress.Security.NonceVerification.Recommended ?>
 				<div class="notice notice-success inline" role="status"><p><?php esc_html_e( 'Scoring saved.', 'leagueflow' ); ?></p></div>
 			<?php endif; ?>
@@ -2144,10 +2202,11 @@ class Admin {
 					<thead><tr><th scope="col"><?php esc_html_e( 'Scope', 'leagueflow' ); ?></th><th scope="col"><?php esc_html_e( 'Scoring used (where each value comes from)', 'leagueflow' ); ?></th><th scope="col"><span class="screen-reader-text"><?php esc_html_e( 'Actions', 'leagueflow' ); ?></span></th></tr></thead>
 					<tbody>
 						<?php foreach ( $this->sports_manager->get_enabled_sports() as $slug => $sport ) : ?>
+							<?php if ( $context_sport && $context_sport !== $slug ) { continue; } ?>
 							<tr>
 								<th scope="row"><?php echo esc_html( $sport['label'] ); ?></th>
 								<td><?php echo esc_html( $describe( get_effective_rules( $slug ) ) ); ?></td>
-								<td><a href="<?php echo esc_url( add_query_arg( array( 'page' => 'leagueflow-settings', 'rules_scope' => 'sport:' . $slug ), admin_url( 'admin.php' ) ) . '#leagueflow-rule-overrides' ); ?>"><?php echo esc_html( isset( $overrides['sport'][ $slug ] ) ? __( 'Edit', 'leagueflow' ) : __( 'Customize', 'leagueflow' ) ); ?><span class="screen-reader-text"> <?php echo esc_html( $sport['label'] ); ?></span></a></td>
+								<td><a href="<?php echo esc_url( add_query_arg( array( 'page' => 'leagueflow-settings', 'lf_sport' => $slug, 'rules_scope' => 'sport:' . $slug ), admin_url( 'admin.php' ) ) . '#leagueflow-rule-overrides' ); ?>"><?php echo esc_html( isset( $overrides['sport'][ $slug ] ) ? __( 'Edit', 'leagueflow' ) : __( 'Customize', 'leagueflow' ) ); ?><span class="screen-reader-text"> <?php echo esc_html( $sport['label'] ); ?></span></a></td>
 							</tr>
 							<?php foreach ( get_term_ids_by_sport( 'lf_competition', $slug ) as $competition_id ) : ?>
 								<?php $competition = get_term( $competition_id, 'lf_competition' ); ?>
@@ -2155,7 +2214,7 @@ class Admin {
 									<tr>
 										<th scope="row">&nbsp;&nbsp;<?php echo esc_html( $sport['label'] . ' › ' . $competition->name ); ?></th>
 										<td><?php echo esc_html( isset( $overrides['competition'][ $competition_id ] ) ? $describe( get_effective_rules( $slug, $competition_id ) ) : __( 'Same as the sport', 'leagueflow' ) ); ?></td>
-										<td><a href="<?php echo esc_url( add_query_arg( array( 'page' => 'leagueflow-settings', 'rules_scope' => 'competition:' . $competition_id ), admin_url( 'admin.php' ) ) . '#leagueflow-rule-overrides' ); ?>"><?php echo esc_html( isset( $overrides['competition'][ $competition_id ] ) ? __( 'Edit', 'leagueflow' ) : __( 'Customize', 'leagueflow' ) ); ?><span class="screen-reader-text"> <?php echo esc_html( $competition->name ); ?></span></a></td>
+										<td><a href="<?php echo esc_url( add_query_arg( array( 'page' => 'leagueflow-settings', 'lf_sport' => $slug, 'rules_scope' => 'competition:' . $competition_id ), admin_url( 'admin.php' ) ) . '#leagueflow-rule-overrides' ); ?>"><?php echo esc_html( isset( $overrides['competition'][ $competition_id ] ) ? __( 'Edit', 'leagueflow' ) : __( 'Customize', 'leagueflow' ) ); ?><span class="screen-reader-text"> <?php echo esc_html( $competition->name ); ?></span></a></td>
 									</tr>
 								<?php endif; ?>
 							<?php endforeach; ?>
@@ -2189,6 +2248,9 @@ class Admin {
 	 */
 	protected function render_rule_override_form( $scope, $key, $name, $effective, $stored, $labels ) {
 		$values = $effective['values'];
+		$sport_slug = 'sport' === $scope ? $key : get_term_sport_slug( $key );
+		$inherited = get_effective_rules( 'sport' === $scope ? '' : $sport_slug )['values'];
+		$score_label = $this->sports_manager->get_definition( $sport_slug )['score_label'];
 		$id     = 'leagueflow-rules-' . sanitize_html_class( $scope . '-' . $key );
 		?>
 		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" class="leagueflow-rule-override-form" aria-labelledby="<?php echo esc_attr( $id ); ?>-title">
@@ -2196,13 +2258,15 @@ class Admin {
 			<input type="hidden" name="action" value="leagueflow_save_rule_override" />
 			<input type="hidden" name="lf_rules_scope" value="<?php echo esc_attr( $scope ); ?>" />
 			<input type="hidden" name="lf_rules_key" value="<?php echo esc_attr( (string) $key ); ?>" />
+			<input type="hidden" name="lf_rules_custom" value="1" />
 			<?php wp_nonce_field( 'leagueflow_save_rule_override_' . $scope . '_' . $key, 'leagueflow_rules_nonce' ); ?>
-			<p><label><input type="checkbox" name="lf_rules_custom" value="1" <?php checked( (bool) $stored ); ?> /> <?php echo esc_html( 'sport' === $scope ? __( 'Use different scoring for this sport (untick to use the default again)', 'leagueflow' ) : __( 'Use different scoring for this competition (untick to use the sport\'s scoring again)', 'leagueflow' ) ); ?></label></p>
+			<p><?php esc_html_e( 'Enter only the values this scope should override. Leave a value blank to inherit; enter 0 when zero is the intended rule.', 'leagueflow' ); ?></p>
 			<table class="form-table" role="presentation">
-				<?php foreach ( array( 'points_win' => __( 'Points for a win', 'leagueflow' ), 'points_draw' => __( 'Points for a draw (tie)', 'leagueflow' ), 'points_loss' => __( 'Points for a loss', 'leagueflow' ) ) as $field => $label ) : ?>
+				<?php foreach ( Settings::scoring_number_labels() as $field => $label ) : ?>
 					<tr>
 						<th scope="row"><label for="<?php echo esc_attr( $id . '-' . $field ); ?>"><?php echo esc_html( $label ); ?></label></th>
-						<td><input type="number" min="0" class="small-text" id="<?php echo esc_attr( $id . '-' . $field ); ?>" name="lf_rules[<?php echo esc_attr( $field ); ?>]" value="<?php echo esc_attr( (string) $values[ $field ] ); ?>" /></td>
+						<td><input type="number" min="0" step="1" class="small-text" id="<?php echo esc_attr( $id . '-' . $field ); ?>" name="lf_rules[<?php echo esc_attr( $field ); ?>]" value="<?php echo esc_attr( isset( $stored[ $field ] ) ? (string) $stored[ $field ] : '' ); ?>" placeholder="<?php echo esc_attr( (string) $inherited[ $field ] ); ?>" aria-describedby="<?php echo esc_attr( $id . '-' . $field . '-help' ); ?>" />
+						<p class="description" id="<?php echo esc_attr( $id . '-' . $field . '-help' ); ?>"><?php echo esc_html( sprintf( /* translators: %d: inherited scoring value */ __( 'Blank inherits %d.', 'leagueflow' ), $inherited[ $field ] ) ); ?> <?php if ( 'forfeit_score_winner' === $field ) { echo esc_html( sprintf( /* translators: %s: scoring unit */ __( 'Winning score in %s; the forfeiting team receives 0.', 'leagueflow' ), $score_label ) ); } ?></p></td>
 					</tr>
 				<?php endforeach; ?>
 				<tr>
@@ -2211,16 +2275,19 @@ class Admin {
 						<?php for ( $index = 0; $index < 4; $index++ ) : ?>
 							<label for="<?php echo esc_attr( $id . '-tie-' . $index ); ?>"><?php echo esc_html( sprintf( /* translators: %d: priority */ __( 'Priority %d', 'leagueflow' ), $index + 1 ) ); ?></label>
 							<select id="<?php echo esc_attr( $id . '-tie-' . $index ); ?>" name="lf_rules[tie_breakers][<?php echo esc_attr( (string) $index ); ?>]">
+								<option value=""><?php echo esc_html( 0 === $index ? __( 'Use inherited order', 'leagueflow' ) : __( 'No additional rule', 'leagueflow' ) ); ?></option>
 								<?php foreach ( $labels as $value => $label ) : ?>
-									<option value="<?php echo esc_attr( $value ); ?>" <?php selected( $values['tie_breakers'][ $index ] ?? '', $value ); ?>><?php echo esc_html( $label ); ?></option>
+									<option value="<?php echo esc_attr( $value ); ?>" <?php selected( $stored['tie_breakers'][ $index ] ?? '', $value ); ?>><?php echo esc_html( $label ); ?></option>
 								<?php endforeach; ?>
 							</select>
 						<?php endfor; ?>
+						<p class="description"><?php echo esc_html( sprintf( /* translators: %s: inherited tie-breaker order */ __( 'Leave every priority blank to inherit: %s. Choose each rule at most once.', 'leagueflow' ), implode( ', ', array_map( static function ( $field ) use ( $labels ) { return $labels[ $field ] ?? $field; }, $inherited['tie_breakers'] ) ) ) ); ?></p>
 					</td>
 				</tr>
 			</table>
 			<?php submit_button( __( 'Save scoring', 'leagueflow' ), 'secondary', '', false ); ?>
-			<a href="<?php echo esc_url( admin_url( 'admin.php?page=leagueflow-settings' ) . '#leagueflow-rule-overrides' ); ?>"><?php esc_html_e( 'Cancel', 'leagueflow' ); ?></a>
+			<?php if ( $stored ) : ?><button type="submit" class="button" name="lf_rules_reset" value="1" formnovalidate><?php esc_html_e( 'Reset to inherited scoring', 'leagueflow' ); ?></button><?php endif; ?>
+			<a href="<?php echo esc_url( add_query_arg( array( 'page' => 'leagueflow-settings', 'lf_sport' => $sport_slug ), admin_url( 'admin.php' ) ) . '#leagueflow-rule-overrides' ); ?>"><?php esc_html_e( 'Cancel', 'leagueflow' ); ?></a>
 		</form>
 		<?php
 	}
@@ -2247,13 +2314,21 @@ class Admin {
 			wp_die( esc_html__( 'That sport or competition does not exist.', 'leagueflow' ), '', array( 'response' => 400 ) );
 		}
 
-		$values = ! empty( $_POST['lf_rules_custom'] ) && isset( $_POST['lf_rules'] ) && is_array( $_POST['lf_rules'] )
+		$values = ! empty( $_POST['lf_rules_custom'] ) && empty( $_POST['lf_rules_reset'] ) && isset( $_POST['lf_rules'] )
 			? wp_unslash( $_POST['lf_rules'] ) // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- sanitize_rule_override() keeps only known keys and integers.
 			: array();
+		$sport_slug = 'sport' === $scope ? $key : get_term_sport_slug( $key );
+		$redirect_args = array( 'page' => 'leagueflow-settings', 'lf_sport' => $sport_slug, 'rules_scope' => $scope . ':' . $key );
+		$errors = Settings::validate_rule_override( $values );
+		if ( $errors ) {
+			$this->queue_notice( implode( ' ', $errors ) . ' ' . __( 'Scoring was not changed.', 'leagueflow' ), 'error' );
+			wp_safe_redirect( add_query_arg( $redirect_args, admin_url( 'admin.php' ) ) . '#leagueflow-rule-overrides' );
+			exit;
+		}
 
 		set_rule_override( $scope, $key, $values );
 
-		wp_safe_redirect( add_query_arg( array( 'page' => 'leagueflow-settings', 'leagueflow_rules_saved' => 1 ), admin_url( 'admin.php' ) ) . '#leagueflow-rule-overrides' );
+		wp_safe_redirect( add_query_arg( $redirect_args + array( 'leagueflow_rules_saved' => 1 ), admin_url( 'admin.php' ) ) . '#leagueflow-rule-overrides' );
 		exit;
 	}
 
@@ -2755,6 +2830,10 @@ class Admin {
 	public function render_match_metabox( $post ) {
 		wp_nonce_field( 'leagueflow_save_match', 'leagueflow_match_nonce' );
 		printf( '<input type="hidden" name="leagueflow_match_state" value="%s" />', esc_attr( self::match_form_state( $post->ID ) ) );
+		$bracket_notice = get_post_meta( $post->ID, '_lf_bracket_sync_notice', true );
+		if ( is_string( $bracket_notice ) && '' !== $bracket_notice ) {
+			printf( '<div class="notice notice-warning inline"><p>%s</p></div>', esc_html( $bracket_notice ) );
+		}
 
 		$sport_slug      = $this->get_editor_sport_slug( $post->ID );
 		$league_level_id = $this->get_editor_league_level_id( $post->ID );
@@ -2769,6 +2848,7 @@ class Admin {
 		$availability_id      = (string) get_post_meta( $post->ID, Field_Availability_Manager::META_AVAILABILITY_ID, true );
 		$schedule_source      = (string) get_post_meta( $post->ID, Field_Availability_Manager::META_SCHEDULE_SOURCE, true );
 		$scheduled_at         = (string) get_post_meta( $post->ID, Field_Availability_Manager::META_SCHEDULED_AT, true );
+		$score_label          = $sport_slug ? ( $this->sports_manager->get_definition( $sport_slug )['score_label'] ?? __( 'Score', 'leagueflow' ) ) : __( 'Score', 'leagueflow' );
 		?>
 		<input type="hidden" name="leagueflow_requested_sport" value="<?php echo esc_attr( $sport_slug ); ?>" />
 		<table class="form-table leagueflow-form-table" role="presentation">
@@ -2816,19 +2896,21 @@ class Admin {
 				<td><?php $this->render_select( 'lf_away_team_id', $teams, $away_team, __( 'Select away team', 'leagueflow' ) ); ?></td>
 			</tr>
 			<tr>
-				<th scope="row"><label for="lf_home_score"><?php esc_html_e( 'Home Score', 'leagueflow' ); ?></label></th>
-				<td><input type="number" min="0" id="lf_home_score" name="lf_home_score" class="small-text" value="<?php echo esc_attr( (string) get_post_meta( $post->ID, 'lf_home_score', true ) ); ?>" /></td>
+				<th scope="row"><label for="lf_home_score"><?php echo esc_html( sprintf( __( 'Home %s', 'leagueflow' ), $score_label ) ); ?></label></th>
+				<td><input type="number" min="0" step="1" inputmode="numeric" id="lf_home_score" name="lf_home_score" class="small-text" aria-describedby="leagueflow-result-preview" value="<?php echo esc_attr( (string) get_post_meta( $post->ID, 'lf_home_score', true ) ); ?>" /></td>
 			</tr>
 			<tr>
-				<th scope="row"><label for="lf_away_score"><?php esc_html_e( 'Away Score', 'leagueflow' ); ?></label></th>
-				<td><input type="number" min="0" id="lf_away_score" name="lf_away_score" class="small-text" value="<?php echo esc_attr( (string) get_post_meta( $post->ID, 'lf_away_score', true ) ); ?>" /></td>
+				<th scope="row"><label for="lf_away_score"><?php echo esc_html( sprintf( __( 'Away %s', 'leagueflow' ), $score_label ) ); ?></label></th>
+				<td><input type="number" min="0" step="1" inputmode="numeric" id="lf_away_score" name="lf_away_score" class="small-text" aria-describedby="leagueflow-result-preview" value="<?php echo esc_attr( (string) get_post_meta( $post->ID, 'lf_away_score', true ) ); ?>" /></td>
 			</tr>
 			<tr>
 				<th scope="row"><label for="lf_status"><?php esc_html_e( 'Status', 'leagueflow' ); ?></label></th>
 				<td>
-					<?php $this->render_select( 'lf_status', $this->statuses, (string) get_post_meta( $post->ID, 'lf_status', true ), __( 'Select status', 'leagueflow' ) ); ?>
-					<p class="description"><?php esc_html_e( 'Standings count published league matches marked Finished with both scores, or a forfeit. Saving scores alone keeps the selected status.', 'leagueflow' ); ?></p>
-					<?php if ( 'volleyball' === $sport_slug ) : ?><p class="description"><strong><?php esc_html_e( 'Volleyball: Home Score and Away Score are sets won (for example 2–1), not rally points. Set Scores below is an optional note.', 'leagueflow' ); ?></strong></p><?php endif; ?>
+					<?php $this->render_select( 'lf_status', $this->statuses, (string) get_post_meta( $post->ID, 'lf_status', true ) ?: 'scheduled', null ); ?>
+					<p class="description"><?php esc_html_e( 'Saving both scores or a forfeit automatically marks a Scheduled match Finished. Live, Postponed and Cancelled stay unchanged. Standings count published, Finished league results.', 'leagueflow' ); ?></p>
+					<p><label for="lf_keep_status"><input type="checkbox" name="lf_keep_status" id="lf_keep_status" value="1" <?php checked( '1' === (string) get_post_meta( $post->ID, '_lf_result_keep_status', true ) ); ?> /> <?php esc_html_e( 'Keep the selected status when saving scores', 'leagueflow' ); ?></label><br /><span class="description"><?php esc_html_e( 'Use this to keep preliminary scores or reopen a result. Uncheck it to restore automatic completion.', 'leagueflow' ); ?></span></p>
+					<p id="leagueflow-result-preview" class="description" role="status" aria-live="polite" data-leagueflow-result-preview data-final-text="<?php esc_attr_e( 'Will save as Finished. Published league results count toward standings.', 'leagueflow' ); ?>" data-status-text="<?php esc_attr_e( 'Will save as %s.', 'leagueflow' ); ?>" data-incomplete-text="<?php esc_attr_e( 'Enter both scores, including 0, to save a final result.', 'leagueflow' ); ?>" data-invalid-text="<?php esc_attr_e( 'Enter non-negative whole-number scores.', 'leagueflow' ); ?>" data-score-max="<?php echo esc_attr( (string) PHP_INT_MAX ); ?>"><?php esc_html_e( 'Blank scores are not zero. Enter 0 for a scoreless team.', 'leagueflow' ); ?></p>
+					<?php if ( 'volleyball' === $sport_slug ) : ?><p class="description"><strong><?php esc_html_e( 'Volleyball: enter sets won (for example 2–1). Set Scores below records the optional rally-point breakdown.', 'leagueflow' ); ?></strong></p><?php endif; ?>
 					<p><button type="submit" name="lf_finalize_result" value="1" class="button button-secondary"><?php esc_html_e( 'Save match as final result', 'leagueflow' ); ?></button></p>
 				</td>
 			</tr>
@@ -2973,7 +3055,7 @@ class Admin {
 								<option value="<?php echo esc_attr( $slug ); ?>" <?php selected( $current_sport ? $current_sport : $sport_slug, $slug ); ?>><?php echo esc_html( $label ); ?></option>
 							<?php endforeach; ?>
 						</select>
-						<p class="description" id="lf_event_sport_help"><?php esc_html_e( 'The sport whose calendar shows this event. Only enabled sports can be chosen.', 'leagueflow' ); ?></p>
+						<p class="description" id="lf_event_sport_help"><?php esc_html_e( 'The sport whose calendar shows this event. Only enabled sports can be chosen. When changing sport, also choose its competitions and seasons or clear those selections.', 'leagueflow' ); ?></p>
 					<?php endif; ?>
 				</td>
 			</tr>
@@ -3156,6 +3238,7 @@ class Admin {
 			$this->queue_notice( __( 'Another person is updating this match. Reload and try again. Match details were not changed.', 'leagueflow' ), 'error' );
 			return;
 		}
+		$saved = false;
 		try {
 			clean_post_cache( $post_id );
 			if ( ! current_user_can( 'edit_post', $post_id ) ) { return; }
@@ -3163,10 +3246,11 @@ class Admin {
 				$this->queue_notice( __( 'The match changed after you opened this form. Reload to review the latest result before saving. Match details were not changed.', 'leagueflow' ), 'error' );
 				return;
 			}
-			$this->save_match_meta_locked( $post_id, $post );
+			$saved = true === $this->save_match_meta_locked( $post_id, $post );
 		} finally {
 			release_db_lock( $lock );
 		}
+		if ( $saved ) { do_action( 'leagueflow_match_result_saved', $post_id ); }
 	}
 
 	/**
@@ -3176,7 +3260,7 @@ class Admin {
 	 */
 	public static function match_form_state( $post_id ) {
 		$state = array();
-		foreach ( array( 'lf_home_team_id', 'lf_away_team_id', 'lf_home_score', 'lf_away_score', 'lf_status', 'lf_outcome', 'lf_is_knockout', 'lf_winner_team_id', 'lf_match_datetime', 'lf_venue', 'lf_next_match_id', 'lf_next_match_slot', 'lf_round_order', 'lf_round_label' ) as $key ) {
+		foreach ( array_merge( array( 'lf_home_team_id', 'lf_away_team_id', 'lf_home_score', 'lf_away_score', 'lf_status', 'lf_outcome', 'lf_is_knockout', 'lf_winner_team_id', 'lf_match_datetime', 'lf_venue', 'lf_next_match_id', 'lf_next_match_slot', 'lf_round_order', 'lf_round_label', '_lf_result_keep_status' ), Sports_Manager::get_all_match_meta_keys() ) as $key ) {
 			$state[ $key ] = get_post_meta( $post_id, $key, true );
 		}
 		return hash_hmac( 'sha256', wp_json_encode( $state ), wp_salt( 'nonce' ) );
@@ -3184,6 +3268,7 @@ class Admin {
 
 	/** Save validated match details while holding the shared result lock. */
 	protected function save_match_meta_locked( $post_id, $post ) {
+		global $wpdb;
 		unset( $post );
 
 		if ( $this->syncing_match_title ) {
@@ -3192,6 +3277,12 @@ class Admin {
 
 		if ( ! $this->can_save( $post_id, 'leagueflow_match_nonce', 'leagueflow_save_match' ) ) {
 			return;
+		}
+		foreach ( array_merge( array( 'lf_home_team_id', 'lf_away_team_id', 'lf_home_score', 'lf_away_score', 'lf_status', 'lf_outcome', 'lf_match_datetime', 'lf_venue', 'lf_is_knockout', 'lf_winner_team_id', 'lf_next_match_id', 'lf_next_match_slot', 'lf_round_order', 'lf_round_label', 'lf_league_level_id', 'lf_keep_status', 'lf_finalize_result', 'leagueflow_requested_sport', 'lf_auto_schedule_match', 'lf_auto_schedule_overwrite', 'lf_auto_availability_id', 'lf_auto_schedule_date' ), Sports_Manager::get_all_match_meta_keys() ) as $key ) {
+			if ( isset( $_POST[ $key ] ) && ! is_scalar( $_POST[ $key ] ) ) {
+				$this->queue_notice( __( 'The submitted match details are invalid. Reload the form and try again; no match details were changed.', 'leagueflow' ), 'error' );
+				return;
+			}
 		}
 
 		$previous_datetime = (string) get_post_meta( $post_id, 'lf_match_datetime', true );
@@ -3206,6 +3297,13 @@ class Admin {
 
 		$home_team_id = isset( $_POST['lf_home_team_id'] ) ? absint( wp_unslash( $_POST['lf_home_team_id'] ) ) : 0;
 		$away_team_id = isset( $_POST['lf_away_team_id'] ) ? absint( wp_unslash( $_POST['lf_away_team_id'] ) ) : 0;
+		foreach ( array_filter( array( $home_team_id, $away_team_id ) ) as $team_id ) {
+			$team = get_post( $team_id );
+			if ( ! $team instanceof \WP_Post || 'lf_team' !== $team->post_type || ! in_array( $team->post_status, array( 'publish', 'private', 'draft', 'pending', 'future' ), true ) || ! can_view_league_post( $team ) ) {
+				$this->queue_notice( __( 'Choose existing teams that you can access. Match details were not changed.', 'leagueflow' ), 'error' );
+				return;
+			}
+		}
 
 		if ( $home_team_id && $home_team_id === $away_team_id ) {
 			$this->queue_notice( __( 'Home team and away team must be different.', 'leagueflow' ), 'error' );
@@ -3229,6 +3327,23 @@ class Admin {
 
 		$match_sport_id = $home_sport_id ? $home_sport_id : $away_sport_id;
 		$match_level_id = $home_level_id ? $home_level_id : $away_level_id;
+		$match_sport = $match_sport_id ? get_term( $match_sport_id, 'lf_sport' ) : null;
+		if ( $match_sport instanceof \WP_Term ) {
+			foreach ( array( 'lf_competition', 'lf_season' ) as $taxonomy ) {
+				$terms = wp_get_object_terms( $post_id, $taxonomy, array( 'fields' => 'ids' ) );
+				if ( is_wp_error( $terms ) ) {
+					$this->queue_notice( __( 'The match context could not be checked. Reload before saving the result.', 'leagueflow' ), 'error' );
+					return;
+				}
+				foreach ( $terms as $term_id ) {
+					$owner = (string) get_term_meta( $term_id, 'lf_sport_slug', true );
+					if ( '' !== $owner && $owner !== $match_sport->slug ) {
+						$this->queue_notice( __( 'The selected competition and season must belong to the teams’ sport. Correct the context before saving the result.', 'leagueflow' ), 'error' );
+						return;
+					}
+				}
+			}
+		}
 
 		if ( ! $match_level_id && isset( $_POST['lf_league_level_id'] ) ) {
 			$match_level_id = absint( wp_unslash( $_POST['lf_league_level_id'] ) );
@@ -3239,20 +3354,25 @@ class Admin {
 		}
 
 		if ( ! $match_level_id ) {
-			$match_level_id = $this->get_default_league_level_id();
+			$match_level_id = $this->find_default_league_level_id();
 		}
 
 		$status = sanitize_key( wp_unslash( $_POST['lf_status'] ?? 'scheduled' ) );
 
-		if ( ! isset( $this->statuses[ $status ] ) ) {
-			$status = 'scheduled';
+		if ( '' !== $status && ! isset( $this->statuses[ $status ] ) ) {
+			$this->queue_notice( __( 'Choose a valid match status. Match details were not changed.', 'leagueflow' ), 'error' );
+			return;
 		}
-		if ( isset( $_POST['lf_finalize_result'] ) && '1' === $_POST['lf_finalize_result'] ) { $status = 'finished'; }
 
 		$home_score = trim( sanitize_text_field( wp_unslash( $_POST['lf_home_score'] ?? '' ) ) );
 		$away_score = trim( sanitize_text_field( wp_unslash( $_POST['lf_away_score'] ?? '' ) ) );
 		$outcome    = sanitize_key( wp_unslash( $_POST['lf_outcome'] ?? '' ) );
-		$outcome    = isset( $this->match_outcomes[ $outcome ] ) ? $outcome : '';
+		if ( '' !== $outcome && ! isset( $this->match_outcomes[ $outcome ] ) ) {
+			$this->queue_notice( __( 'Choose a valid result type. Match details were not changed.', 'leagueflow' ), 'error' );
+			return;
+		}
+		$keep_status = isset( $_POST['lf_keep_status'] ) && '1' === (string) $_POST['lf_keep_status'];
+		$status = Match_Status::status_for_score_entry( $status, $home_score, $away_score, $outcome, $keep_status, isset( $_POST['lf_finalize_result'] ) && '1' === (string) $_POST['lf_finalize_result'] );
 
 		// Validate before any write. Scores are whole numbers of zero or more; a
 		// finished match played as normal needs both, so a blank box is never
@@ -3267,6 +3387,14 @@ class Admin {
 			$this->queue_notice( __( 'Match details were not saved. Correct the score and update again.', 'leagueflow' ), 'error' );
 			return;
 		}
+		if ( 'finished' === $status && ( ! $home_team_id || ! $away_team_id || ! $home_sport_id || ! $away_sport_id ) ) {
+			$this->queue_notice( __( 'A final result needs two different teams with the same sport. Select both teams before saving the result.', 'leagueflow' ), 'error' );
+			return;
+		}
+		if ( $match_level_id && ! term_exists( $match_level_id, 'lf_league_level' ) ) {
+			$this->queue_notice( __( 'Choose an existing league level. Match details were not changed.', 'leagueflow' ), 'error' );
+			return;
+		}
 
 		$is_knockout   = ! empty( $_POST['lf_is_knockout'] ) ? 1 : 0;
 		$winner_team   = isset( $_POST['lf_winner_team_id'] ) ? absint( wp_unslash( $_POST['lf_winner_team_id'] ) ) : 0;
@@ -3279,8 +3407,8 @@ class Admin {
 		}
 
 		if ( $winner_team && ! in_array( $winner_team, array( $home_team_id, $away_team_id ), true ) ) {
-			$winner_team = 0;
 			$this->queue_notice( __( 'Winner override must match the selected home or away team.', 'leagueflow' ), 'error' );
+			return;
 		}
 
 		if ( $next_match_id && $next_match_id === $post_id ) {
@@ -3306,60 +3434,105 @@ class Admin {
 			}
 		}
 
-		$this->update_or_delete_meta( $post_id, 'lf_match_datetime', $datetime );
-		$this->update_or_delete_meta( $post_id, 'lf_venue', $venue );
+		// A result is one write: a failed score, context or status update must not
+		// leave standings using half the old result and half the new result.
+		$meta = array(
+			'lf_match_datetime' => '' === $datetime ? null : $datetime,
+			'lf_venue' => '' === $venue ? null : $venue,
+			'lf_home_team_id' => (string) $home_team_id,
+			'lf_away_team_id' => (string) $away_team_id,
+			'lf_home_score' => '' === $home_score ? null : (string) (int) $home_score,
+			'lf_away_score' => '' === $away_score ? null : (string) (int) $away_score,
+			'lf_outcome' => '' === $outcome ? null : $outcome,
+			'lf_is_knockout' => $is_knockout ? '1' : '',
+			'_lf_result_keep_status' => $keep_status ? '1' : null,
+			'lf_round_label' => $is_knockout ? sanitize_text_field( wp_unslash( $_POST['lf_round_label'] ?? '' ) ) : null,
+			'lf_round_order' => $is_knockout ? (string) absint( $_POST['lf_round_order'] ?? 0 ) : null,
+			'lf_winner_team_id' => $is_knockout ? (string) $winner_team : null,
+			'lf_next_match_id' => $is_knockout ? (string) $next_match_id : null,
+			'lf_next_match_slot' => $is_knockout ? ( in_array( $next_slot, array( 'home', 'away' ), true ) ? $next_slot : 'home' ) : null,
+		);
 		foreach ( array( 'home' => $home_team_id, 'away' => $away_team_id ) as $slot => $team_id ) {
-			if ( $team_id !== (int) get_post_meta( $post_id, 'lf_' . $slot . '_team_id', true ) ) { delete_post_meta( $post_id, '_lf_' . $slot . '_advanced_from' ); }
+			if ( $team_id !== (int) get_post_meta( $post_id, 'lf_' . $slot . '_team_id', true ) ) { $meta[ '_lf_' . $slot . '_advanced_from' ] = null; }
 		}
-		update_post_meta( $post_id, 'lf_home_team_id', $home_team_id );
-		update_post_meta( $post_id, 'lf_away_team_id', $away_team_id );
-		$this->update_or_delete_meta( $post_id, 'lf_home_score', '' === $home_score ? '' : (string) absint( $home_score ) );
-		$this->update_or_delete_meta( $post_id, 'lf_away_score', '' === $away_score ? '' : (string) absint( $away_score ) );
-		$this->update_or_delete_meta( $post_id, 'lf_outcome', $outcome );
-
-		update_post_meta( $post_id, 'lf_is_knockout', $is_knockout );
-
 		foreach ( Sports_Manager::get_all_match_meta_keys() as $meta_key ) {
-			$this->update_or_delete_meta(
-				$post_id,
-				$meta_key,
-				sanitize_textarea_field( wp_unslash( $_POST[ $meta_key ] ?? '' ) )
-			);
+			// Other sports' hidden note fields are not a request to delete them.
+			if ( array_key_exists( $meta_key, $_POST ) ) {
+				$note = sanitize_textarea_field( wp_unslash( $_POST[ $meta_key ] ) );
+				$meta[ $meta_key ] = '' === $note ? null : $note;
+			}
 		}
-
-		if ( $is_knockout ) {
-			update_post_meta( $post_id, 'lf_round_label', sanitize_text_field( wp_unslash( $_POST['lf_round_label'] ?? '' ) ) );
-			update_post_meta( $post_id, 'lf_round_order', isset( $_POST['lf_round_order'] ) ? absint( wp_unslash( $_POST['lf_round_order'] ) ) : 0 );
-			update_post_meta( $post_id, 'lf_winner_team_id', $winner_team );
-			update_post_meta( $post_id, 'lf_next_match_id', $next_match_id );
-			update_post_meta( $post_id, 'lf_next_match_slot', in_array( $next_slot, array( 'home', 'away' ), true ) ? $next_slot : 'home' );
-		} else {
-			delete_post_meta( $post_id, 'lf_round_label' );
-			delete_post_meta( $post_id, 'lf_round_order' );
-			delete_post_meta( $post_id, 'lf_winner_team_id' );
-			delete_post_meta( $post_id, 'lf_next_match_id' );
-			delete_post_meta( $post_id, 'lf_next_match_slot' );
+		if ( empty( $_POST['lf_auto_schedule_match'] ) && ( $datetime !== $previous_datetime || $venue !== $previous_venue ) ) {
+			$meta[ Field_Availability_Manager::META_SCHEDULE_SOURCE ] = '' !== $datetime || '' !== $venue ? 'manual' : null;
+			$meta[ Field_Availability_Manager::META_AVAILABILITY_ID ] = null;
+			$meta[ Field_Availability_Manager::META_SCHEDULED_AT ] = null;
 		}
-
-		if ( $match_sport_id ) {
-			wp_set_object_terms( $post_id, array( $match_sport_id ), 'lf_sport', false );
-		} else {
-			$this->assign_default_sport_if_missing( $post_id );
+		if ( ! $match_sport_id ) {
+			$match_sport_id = get_post_primary_term_id( $post_id, 'lf_sport' );
+			if ( ! $match_sport_id && $this->is_assignable_sport_slug( $this->get_context_sport_slug() ) ) {
+				$context_sport = get_term_by( 'slug', $this->get_context_sport_slug(), 'lf_sport' );
+				$match_sport_id = $context_sport instanceof \WP_Term ? (int) $context_sport->term_id : 0;
+			}
 		}
-
-		if ( $match_level_id ) {
-			wp_set_object_terms( $post_id, array( $match_level_id ), 'lf_league_level', false );
-		} else {
-			$this->assign_default_league_level_if_missing( $post_id );
+		$context = array_filter( array( 'lf_sport' => $match_sport_id, 'lf_league_level' => $match_level_id ) );
+		$prior_context = array();
+		foreach ( $context as $taxonomy => $term_id ) { $prior_context[ $taxonomy ] = wp_get_object_terms( $post_id, $taxonomy, array( 'fields' => 'ids' ) ); }
+		foreach ( array( $wpdb->postmeta, $wpdb->term_relationships, $wpdb->term_taxonomy ) as $table_name ) {
+			$table = $wpdb->get_row( $wpdb->prepare( 'SHOW TABLE STATUS WHERE Name = %s', $table_name ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			if ( ! $table || 'innodb' !== strtolower( (string) $table->Engine ) ) {
+				$this->queue_notice( __( 'The match could not be safely saved. Ask your administrator to check that the WordPress match and taxonomy tables support transactions.', 'leagueflow' ), 'error' );
+				return;
+			}
 		}
-
+		if ( false === $wpdb->query( 'START TRANSACTION' ) ) { // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			$this->queue_notice( __( 'The match could not be saved. No match details were changed; please try again.', 'leagueflow' ), 'error' );
+			return;
+		}
+		$committed = false;
+		Match_Status::defer_transitions( $post_id );
+		try {
+			foreach ( $meta as $key => $value ) {
+				if ( null === $value ) { delete_post_meta( $post_id, $key ); }
+				else { update_post_meta( $post_id, $key, wp_slash( $value ) ); }
+				if ( null === $value ? metadata_exists( 'post', $post_id, $key ) : (string) get_post_meta( $post_id, $key, true ) !== $value ) {
+					throw new \RuntimeException( 'Match metadata was not saved completely: ' . $key );
+				}
+			}
+			foreach ( $context as $taxonomy => $term_id ) {
+				$result = wp_set_object_terms( $post_id, array( $term_id ), $taxonomy, false );
+				if ( is_wp_error( $result ) || array( (int) $term_id ) !== array_map( 'intval', (array) wp_get_object_terms( $post_id, $taxonomy, array( 'fields' => 'ids' ) ) ) ) {
+					throw new \RuntimeException( 'Match context was not saved completely.' );
+				}
+			}
+			// Status is the last field written; observers run only after COMMIT.
+			update_post_meta( $post_id, 'lf_status', $status );
+			if ( $status !== get_post_meta( $post_id, 'lf_status', true ) || false === $wpdb->query( 'COMMIT' ) ) { // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+				throw new \RuntimeException( 'Match status could not be committed.' );
+			}
+			$committed = true;
+		} catch ( \Throwable $error ) {
+			// Keep database errors and third-party hook details out of staff notices.
+		} finally {
+			if ( ! $committed ) {
+				$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+				clean_post_cache( $post_id );
+				foreach ( $context as $taxonomy => $term_id ) { clean_term_cache( array_merge( array( $term_id ), is_array( $prior_context[ $taxonomy ] ) ? $prior_context[ $taxonomy ] : array() ), $taxonomy ); }
+			}
+			Match_Status::flush_transitions( $post_id, $committed );
+		}
+		if ( ! $committed ) {
+			$this->queue_notice( __( 'The complete match result could not be saved. No match details were changed; reload and try again.', 'leagueflow' ), 'error' );
+			return;
+		}
 		$this->sync_match_title( $post_id, $home_team_id, $away_team_id, $datetime );
-		// Observers of the lifecycle transition must see the complete saved result.
-		update_post_meta( $post_id, 'lf_status', $status );
 		if ( 'finished' !== $status && '' !== $home_score && '' !== $away_score ) {
-			$this->queue_notice( __( 'Scores saved. This match is not Finished, so it is not included in standings. Use Save match as final result when play is complete.', 'leagueflow' ), 'warning' );
+			$this->queue_notice( __( 'Scores saved with the selected status. Only Finished results contribute to standings. Use Save match as final result when play is complete.', 'leagueflow' ), 'info' );
 		} elseif ( 'finished' === $status && 'publish' !== get_post_status( $post_id ) ) {
 			$this->queue_notice( __( 'Final result saved. Publish this match to include it in public standings.', 'leagueflow' ), 'warning' );
+		} elseif ( 'finished' === $status && ! $is_knockout && ( 'publish' !== get_post_status( $home_team_id ) || 'publish' !== get_post_status( $away_team_id ) ) ) {
+			$this->queue_notice( __( 'Final result saved. Publish both teams before this result can count in standings.', 'leagueflow' ), 'warning' );
+		} elseif ( 'finished' === $status ) {
+			$this->queue_notice( $is_knockout ? __( 'Final result saved. Bracket advancement uses this result when the next round is available.', 'leagueflow' ) : __( 'Final result saved and marked Finished. Check Standings in this match’s sport, competition, season and level.', 'leagueflow' ), 'success' );
 		}
 
 		if ( ! empty( $_POST['lf_auto_schedule_match'] ) ) {
@@ -3390,16 +3563,8 @@ class Admin {
 				$message = ! empty( $result['messages'][0] ) ? $result['messages'][0] : __( 'Scheduling assistant could not find an open field slot for this match.', 'leagueflow' );
 				$this->queue_notice( $message, 'warning' );
 			}
-		} elseif ( $datetime !== $previous_datetime || $venue !== $previous_venue ) {
-			if ( '' !== $datetime || '' !== $venue ) {
-				update_post_meta( $post_id, Field_Availability_Manager::META_SCHEDULE_SOURCE, 'manual' );
-			} else {
-				delete_post_meta( $post_id, Field_Availability_Manager::META_SCHEDULE_SOURCE );
-			}
-
-			delete_post_meta( $post_id, Field_Availability_Manager::META_AVAILABILITY_ID );
-			delete_post_meta( $post_id, Field_Availability_Manager::META_SCHEDULED_AT );
 		}
+		return true;
 	}
 
 	/**
@@ -3423,14 +3588,14 @@ class Admin {
 				continue;
 			}
 
-			if ( ! preg_match( '/^\d+$/', $score ) ) {
+			if ( ( ! is_string( $score ) && ! is_int( $score ) ) || ! preg_match( '/^[0-9]+$/D', (string) $score ) ) {
 				/* translators: %s: Home score or Away score */
 				$errors[] = sprintf( __( '%s must be a whole number of 0 or more.', 'leagueflow' ), $labels[ $side ] );
 				continue;
 			}
 
 			// No sport-specific cap: only the largest integer PHP can store and compare exactly.
-			$digits = ltrim( $score, '0' );
+			$digits = ltrim( (string) $score, '0' );
 			$max    = (string) PHP_INT_MAX;
 
 			if ( strlen( $digits ) > strlen( $max ) || ( strlen( $digits ) === strlen( $max ) && strcmp( $digits, $max ) > 0 ) ) {
@@ -3457,6 +3622,13 @@ class Admin {
 		unset( $post );
 
 		if ( ! $this->can_save( $post_id, 'leagueflow_calendar_event_nonce', 'leagueflow_save_calendar_event' ) ) {
+			Taxonomies::clear_editor_event_context( $post_id );
+			return;
+		}
+		$context = Taxonomies::prepare_editor_event_context( $post_id );
+		if ( $context['error'] ) {
+			Taxonomies::notice_editor_event_context( $context['error'] );
+			Taxonomies::clear_editor_event_context( $post_id );
 			return;
 		}
 
@@ -3466,7 +3638,16 @@ class Admin {
 		$end   = $end ? str_replace( 'T', ' ', $end ) : '';
 
 		if ( ( $start && ! $this->is_valid_local_datetime( $start ) ) || ( $end && ! $this->is_valid_local_datetime( $end ) ) || ( $end && ( ! $start || $end <= $start ) ) ) {
+			Taxonomies::restore_editor_event_context( $post_id, $context );
+			Taxonomies::clear_editor_event_context( $post_id );
 			$this->queue_notice( __( 'Use valid event dates and an end time after the start time. Event details were not changed.', 'leagueflow' ), 'error' );
+			return;
+		}
+		$saved_context = $this->save_calendar_event_sport_choice( $post_id, $context );
+		if ( is_wp_error( $saved_context ) ) {
+			Taxonomies::restore_editor_event_context( $post_id, $context );
+			Taxonomies::clear_editor_event_context( $post_id );
+			$this->queue_notice( $saved_context->get_error_message(), 'error' );
 			return;
 		}
 
@@ -3491,8 +3672,8 @@ class Admin {
 		$this->update_or_delete_meta( $post_id, 'lf_event_registration_url', esc_url_raw( wp_unslash( $_POST['lf_event_registration_url'] ?? '' ) ) );
 		update_post_meta( $post_id, 'lf_event_registration_required', ! empty( $_POST['lf_event_registration_required'] ) ? 1 : 0 );
 
-		$this->save_calendar_event_sport_choice( $post_id );
 		$this->assign_league_level_from_request( $post_id );
+		Taxonomies::clear_editor_event_context( $post_id );
 	}
 
 	/** Strict site-local calendar input; rejects impossible dates and DST gaps. */
@@ -3510,34 +3691,27 @@ class Admin {
 	 * An event may move to another enabled sport. Its current sport is kept
 	 * when nothing valid is chosen, even if that sport is no longer enabled.
 	 *
-	 * @param int $post_id Event ID.
-	 * @return void
+	 * @param int   $post_id Event ID.
+	 * @param array $context Validated original and candidate assignments.
+	 * @return true|\WP_Error
 	 */
-	protected function save_calendar_event_sport_choice( $post_id ) {
-		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- verified by can_save().
-		if ( ! array_key_exists( 'lf_sport_choice', $_POST ) ) {
-			$this->assign_default_sport_if_missing( $post_id );
-			return;
+	protected function save_calendar_event_sport_choice( $post_id, $context ) {
+		$save_error = new \WP_Error( 'leagueflow_event_context_not_saved', __( 'The event sport and context could not be saved together. Their previous assignments were kept; please try again.', 'leagueflow' ) );
+		foreach ( array( 'lf_competition', 'lf_season' ) as $taxonomy ) {
+			$ids = wp_get_object_terms( $post_id, $taxonomy, array( 'fields' => 'ids' ) );
+			if ( is_wp_error( $ids ) ) { return $save_error; }
+			$ids = array_map( 'intval', $ids );
+			sort( $ids );
+			if ( $ids !== $context['candidate'][$taxonomy] ) { return $save_error; }
 		}
-
-		$choice  = $this->get_submitted_sport_choice();
-		$current = get_post_primary_term_slug( $post_id, 'lf_sport' );
-
-		if ( $choice && $choice === $current ) {
-			return;
-		}
-
-		if ( $this->is_assignable_sport_slug( $choice ) ) {
-			$term = get_term_by( 'slug', $choice, 'lf_sport' );
-			wp_set_object_terms( $post_id, array( (int) $term->term_id ), 'lf_sport', false );
-			return;
-		}
-
-		if ( '' !== $choice ) {
-			$this->queue_notice( __( 'That sport is not enabled, so the event\'s sport was not changed.', 'leagueflow' ), 'error' );
-		} elseif ( ! $current ) {
+		$sport_ids = $context['candidate']['lf_sport'];
+		if ( $sport_ids !== $context['existing']['lf_sport'] ) {
+			$result = wp_set_object_terms( $post_id, $sport_ids, 'lf_sport', false );
+			if ( is_wp_error( $result ) || ! object_term_saved( $post_id, $sport_ids[0], 'lf_sport' ) ) { return $save_error; }
+		} elseif ( ! $sport_ids && isset( $_POST['lf_sport_choice'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Verified by can_save().
 			$this->queue_notice( __( 'Choose a sport for this calendar event so it appears in that sport\'s calendar.', 'leagueflow' ), 'error' );
 		}
+		return true;
 	}
 
 	/**
@@ -3829,9 +4003,15 @@ class Admin {
 				echo esc_html( (string) get_post_meta( $post_id, 'lf_venue', true ) );
 				break;
 			case 'score':
+				$outcome = (string) get_post_meta( $post_id, 'lf_outcome', true );
+				if ( '' !== $outcome ) {
+					$label = Match_Status::outcome_label( $outcome );
+					echo $label ? esc_html( $label ) : '&mdash;';
+					break;
+				}
 				$home = get_post_meta( $post_id, 'lf_home_score', true );
 				$away = get_post_meta( $post_id, 'lf_away_score', true );
-				echo has_score( $home ) && has_score( $away ) ? esc_html( score_to_int( $home ) . ' - ' . score_to_int( $away ) ) : '&mdash;';
+				echo Match_Status::is_valid_score( $home ) && Match_Status::is_valid_score( $away ) ? esc_html( score_to_int( $home ) . ' - ' . score_to_int( $away ) ) : '&mdash;';
 				break;
 			case 'status':
 				$status = (string) get_post_meta( $post_id, 'lf_status', true );
@@ -3980,7 +4160,7 @@ class Admin {
 	 * @return void
 	 */
 	public function render_admin_sport_filter( $post_type, $which = 'top' ) {
-		if ( ! is_string( $post_type ) || ! in_array( $post_type, $this->get_sport_filterable_post_types(), true ) ) {
+		if ( 'top' !== $which || ! is_string( $post_type ) || ! in_array( $post_type, $this->get_sport_filterable_post_types(), true ) ) {
 			return;
 		}
 
@@ -4016,6 +4196,18 @@ class Admin {
 			<?php endforeach; ?>
 		</select>
 		<?php
+		if ( 'lf_match' === $post_type ) {
+			$match_status = $this->get_requested_match_status();
+			?>
+			<label for="leagueflow-filter-match-status" class="screen-reader-text"><?php esc_html_e( 'Filter by match status', 'leagueflow' ); ?></label>
+			<select name="lf_match_status" id="leagueflow-filter-match-status">
+				<option value=""><?php esc_html_e( 'All match statuses', 'leagueflow' ); ?></option>
+				<?php foreach ( Match_Status::statuses() as $value => $label ) : ?>
+					<option value="<?php echo esc_attr( $value ); ?>" <?php selected( $match_status, $value ); ?>><?php echo esc_html( $label ); ?></option>
+				<?php endforeach; ?>
+			</select>
+			<?php
+		}
 		// Teams and matches can also be filtered by competition and season (players have neither:
 		// they belong to teams, so their list keeps sport and level filters only).
 		if ( ! in_array( $post_type, array( 'lf_team', 'lf_match' ), true ) ) {
@@ -4057,13 +4249,45 @@ class Admin {
 	 * @return string
 	 */
 	protected function get_list_term_filter( $taxonomy ) {
-		$raw = sanitize_key( wp_unslash( $_GET[ $taxonomy . '_filter' ] ?? '' ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$input = wp_unslash( $_GET[ $taxonomy . '_filter' ] ?? '' ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$raw   = is_scalar( $input ) ? sanitize_key( (string) $input ) : '';
 
 		if ( 'none' === $raw ) {
 			return 'none';
 		}
 
 		return absint( $raw ) && get_term( absint( $raw ), $taxonomy ) instanceof \WP_Term ? (string) absint( $raw ) : '';
+	}
+
+	/** Match lifecycle filter, separate from WordPress publication status. */
+	protected function get_requested_match_status() {
+		$input = wp_unslash( $_GET['lf_match_status'] ?? '' ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$value = is_scalar( $input ) ? sanitize_key( (string) $input ) : '';
+
+		return isset( Match_Status::statuses()[ $value ] ) ? $value : '';
+	}
+
+	/** Filters shared by the visible list, its status counts and view links. */
+	protected function get_list_filter_context( $post_type ) {
+		$context = array_filter( array(
+			'lf_sport' => $this->get_requested_sport_slug(),
+			'lf_league_level' => $this->get_requested_league_level_slug(),
+		) );
+		if ( in_array( $post_type, array( 'lf_team', 'lf_match' ), true ) ) {
+			foreach ( array( 'lf_competition', 'lf_season' ) as $taxonomy ) {
+				$value = $this->get_list_term_filter( $taxonomy );
+				if ( '' !== $value ) { $context[ $taxonomy . '_filter' ] = $value; }
+			}
+		}
+		if ( 'lf_match' === $post_type ) {
+			if ( $this->get_requested_match_status() ) { $context['lf_match_status'] = $this->get_requested_match_status(); }
+			$batch = wp_unslash( $_GET['lf_batch'] ?? '' ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+			if ( is_scalar( $batch ) && '' !== (string) $batch ) { $context['lf_batch'] = sanitize_key( (string) $batch ); }
+		}
+		$search = wp_unslash( $_GET['s'] ?? '' ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		if ( is_scalar( $search ) && '' !== trim( (string) $search ) ) { $context['s'] = sanitize_text_field( (string) $search ); }
+
+		return $context;
 	}
 
 	/**
@@ -4194,6 +4418,13 @@ class Admin {
 				'key'   => Fixture_Generator::META_BATCH,
 				'value' => $batch,
 			);
+			$query->set( 'meta_query', $meta_query );
+		}
+
+		if ( 'lf_match' === $post_type && $this->get_requested_match_status() ) {
+			$meta_query = $query->get( 'meta_query' );
+			$meta_query = is_array( $meta_query ) ? $meta_query : array();
+			$meta_query[] = array( 'key' => 'lf_status', 'value' => $this->get_requested_match_status() );
 			$query->set( 'meta_query', $meta_query );
 		}
 
@@ -4335,14 +4566,7 @@ class Admin {
 			return $views;
 		}
 
-		$sport_slug  = $this->get_requested_sport_slug();
-		$level_slug  = $this->get_requested_league_level_slug();
-		$context     = array_filter(
-			array(
-				'lf_sport'        => $sport_slug,
-				'lf_league_level' => $level_slug,
-			)
-		);
+		$context     = $this->get_list_filter_context( $post_type );
 		$base_url    = add_query_arg( array_merge( array( 'post_type' => $post_type ), $context ), admin_url( 'edit.php' ) );
 		$current     = sanitize_key( wp_unslash( $_GET['post_status'] ?? '' ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 		$schedule    = $this->get_requested_schedule_view();
@@ -4436,8 +4660,9 @@ class Admin {
 			'meta_query'             => array(),
 		);
 
-		$sport_slug = $this->get_requested_sport_slug();
-		$level_slug = $this->get_requested_league_level_slug();
+		$context    = $this->get_list_filter_context( $post_type );
+		$sport_slug = $context['lf_sport'] ?? '';
+		$level_slug = $context['lf_league_level'] ?? '';
 
 		if ( 'lf_join_request' === $post_type ) {
 			if ( $sport_slug ) {
@@ -4471,6 +4696,21 @@ class Admin {
 		if ( $extra_meta ) {
 			$args['meta_query'][] = $extra_meta;
 		}
+
+		foreach ( array( 'lf_competition', 'lf_season' ) as $taxonomy ) {
+			$filter = $context[ $taxonomy . '_filter' ] ?? '';
+			if ( '' !== $filter ) {
+				$args['tax_query'][] = 'none' === $filter
+					? array( 'taxonomy' => $taxonomy, 'operator' => 'NOT EXISTS' )
+					: array( 'taxonomy' => $taxonomy, 'field' => 'term_id', 'terms' => array( (int) $filter ) );
+			}
+		}
+		foreach ( array( 'lf_match_status' => 'lf_status', 'lf_batch' => Fixture_Generator::META_BATCH ) as $parameter => $meta_key ) {
+			if ( ! empty( $context[ $parameter ] ) ) {
+				$args['meta_query'][] = array( 'key' => $meta_key, 'value' => $context[ $parameter ] );
+			}
+		}
+		if ( isset( $context['s'] ) ) { $args['s'] = $context['s']; }
 
 		if ( $author ) {
 			$args['author'] = (int) $author;
@@ -4597,17 +4837,44 @@ class Admin {
 						++$skipped;
 						continue;
 					}
+					$home_id = (int) get_post_meta( $post_id, 'lf_home_team_id', true );
+					$away_id = (int) get_post_meta( $post_id, 'lf_away_team_id', true );
+					$home_sport = get_post_primary_term_id( $home_id, 'lf_sport' );
+					$away_sport = get_post_primary_term_id( $away_id, 'lf_sport' );
+					$home_level = get_post_primary_term_id( $home_id, 'lf_league_level' );
+					$away_level = get_post_primary_term_id( $away_id, 'lf_league_level' );
+					if ( ! $home_id || ! $away_id || $home_id === $away_id || 'lf_team' !== get_post_type( $home_id ) || 'lf_team' !== get_post_type( $away_id )
+						|| ! in_array( get_post_status( $home_id ), array( 'publish', 'private', 'draft', 'pending', 'future' ), true )
+						|| ! in_array( get_post_status( $away_id ), array( 'publish', 'private', 'draft', 'pending', 'future' ), true )
+						|| ! can_view_league_post( $home_id ) || ! can_view_league_post( $away_id ) || ! $home_sport || $home_sport !== $away_sport
+						|| get_post_primary_term_id( $post_id, 'lf_sport' ) !== $home_sport || ( $home_level && $away_level && $home_level !== $away_level ) ) {
+						++$skipped;
+						continue;
+					}
+					$sport_term = get_term( $home_sport, 'lf_sport' );
+					$compatible_context = $sport_term instanceof \WP_Term;
+					foreach ( array( 'lf_competition', 'lf_season' ) as $taxonomy ) {
+						$terms = wp_get_object_terms( $post_id, $taxonomy, array( 'fields' => 'ids' ) );
+						if ( is_wp_error( $terms ) ) { $compatible_context = false; continue; }
+						foreach ( $terms as $term_id ) {
+							$owner = (string) get_term_meta( $term_id, 'lf_sport_slug', true );
+							if ( '' !== $owner && ( ! $sport_term instanceof \WP_Term || $owner !== $sport_term->slug ) ) { $compatible_context = false; }
+						}
+					}
+					if ( ! $compatible_context ) { ++$skipped; continue; }
 				}
+				Match_Status::defer_transitions( $post_id );
 				update_post_meta( $post_id, 'lf_status', $status );
 				$saved = $status === get_post_meta( $post_id, 'lf_status', true );
 				if ( $saved ) { ++$updated; } else { ++$skipped; }
 			} finally {
+				Match_Status::flush_transitions( $post_id, $saved );
 				release_db_lock( $lock );
 			}
-			if ( $saved && 'finished' === $status ) { $this->knockout_service->advance_winner( $post_id ); }
+			if ( $saved ) { do_action( 'leagueflow_match_result_saved', $post_id ); }
 		}
 		if ( $skipped ) {
-			$this->queue_notice( sprintf( __( '%d selected matches were not changed. Check edit access, concurrent updates and complete valid scores before marking a match Finished.', 'leagueflow' ), $skipped ), 'warning' );
+			$this->queue_notice( sprintf( __( '%d selected matches were not changed. Check edit access, concurrent updates, both teams and complete valid scores before marking a match Finished.', 'leagueflow' ), $skipped ), 'warning' );
 		}
 
 		return add_query_arg(
@@ -4848,9 +5115,13 @@ class Admin {
 		// Capture this before the update clears the flag so we can tell setup from a later edit.
 		$was_initial_setup = $this->sports_manager->is_setup_required();
 
-		$sports = isset( $_POST['leagueflow_enabled_sports'] ) ? array_map( 'sanitize_key', (array) wp_unslash( $_POST['leagueflow_enabled_sports'] ) ) : array();
-
-		$this->sports_manager->update_enabled_sports( $sports );
+		$sports = isset( $_POST['leagueflow_enabled_sports'] ) ? wp_unslash( $_POST['leagueflow_enabled_sports'] ) : array();
+		$result = $this->sports_manager->update_enabled_sports( $sports );
+		if ( is_wp_error( $result ) ) {
+			$this->queue_notice( $result->get_error_message(), 'error' );
+			wp_safe_redirect( admin_url( 'admin.php?page=leagueflow-sports' ) );
+			exit;
+		}
 
 		// After the first-time setup, drop the user into the Overview; later edits stay on Sports.
 		wp_safe_redirect(
@@ -4951,12 +5222,15 @@ class Admin {
 		$page           = sanitize_key( wp_unslash( $_POST['leagueflow_schedule_page'] ?? 'leagueflow-fields' ) );
 		$page           = $page ? $page : 'leagueflow-fields';
 		$sport_slug     = sanitize_key( wp_unslash( $_POST['leagueflow_schedule_sport'] ?? '' ) );
-		$competition_id = absint( wp_unslash( $_POST['leagueflow_schedule_competition'] ?? 0 ) );
-		$season_id      = absint( wp_unslash( $_POST['leagueflow_schedule_season'] ?? 0 ) );
+		$competition_id = wp_unslash( $_POST['leagueflow_schedule_competition'] ?? 0 );
+		$season_id      = wp_unslash( $_POST['leagueflow_schedule_season'] ?? 0 );
 		$mismatch       = false;
 
 		// A competition or season from another sport would silently schedule nothing (or the wrong sport).
 		foreach ( array( 'lf_competition' => $competition_id, 'lf_season' => $season_id ) as $taxonomy => $term_id ) {
+			// Read ownership with an integer, but preserve the raw scope above so
+			// the scheduling service can reject malformed IDs before any writes.
+			$term_id = is_int( $term_id ) || is_string( $term_id ) ? absint( $term_id ) : 0;
 			if ( ! $term_id ) {
 				continue;
 			}
@@ -5670,15 +5944,15 @@ class Admin {
 	/**
 	 * Get the LeagueFlow menu slug for the current admin screen.
 	 *
-	 * Every LeagueFlow screen (lists, edit and add screens, taxonomy screens and
-	 * plugin pages, including legacy per-sport slugs) lives under one menu.
+	 * Global screens use the main menu; scoped records and pages highlight the
+	 * corresponding enabled sport's shortcuts.
 	 *
 	 * @return string
 	 */
 	protected function get_current_leagueflow_admin_menu_slug() {
 		$page = $this->get_current_admin_plugin_page_slug();
 		$sport = $this->get_context_sport_slug();
-		$global = in_array( $page, array( 'leagueflow-sports', 'leagueflow-settings', 'leagueflow-utilities' ), true ) || 'lf_league_level' === $this->get_current_admin_taxonomy();
+		$global = in_array( $page, array( 'leagueflow-sports', 'leagueflow-settings', 'leagueflow-utilities', 'leagueflow-guide' ), true ) || 'lf_league_level' === $this->get_current_admin_taxonomy();
 		if ( $sport && ! $global && ( 0 === strpos( $page, 'leagueflow' ) || in_array( $this->get_current_admin_post_type(), $this->get_leagueflow_admin_post_types(), true ) || isset( $this->get_leagueflow_taxonomy_submenu_files()[ $this->get_current_admin_taxonomy() ] ) ) ) {
 			return 'leagueflow-sport-' . $sport;
 		}
@@ -5937,23 +6211,9 @@ class Admin {
 		}
 
 		foreach ( array( 'lf_team' => 'teams', 'lf_player' => 'players', 'lf_match' => 'matches', 'lf_calendar_event' => 'calendar_events' ) as $post_type => $key ) {
-			$counts[ $key ] = (int) count(
-				get_posts(
-					array(
-						'post_type'      => $post_type,
-						'post_status'    => array( 'publish', 'private' ),
-						'posts_per_page' => -1,
-						'fields'         => 'ids',
-						'tax_query'      => array(
-							array(
-								'taxonomy' => 'lf_sport',
-								'field'    => 'term_id',
-								'terms'    => array( $sport_id ),
-							),
-						),
-					)
-				)
-			);
+			$counts[ $key ] = $this->count_dashboard_records( $post_type, array(
+				array( 'taxonomy' => 'lf_sport', 'field' => 'term_id', 'terms' => array( $sport_id ) ),
+			) );
 		}
 
 		$counts['competitions'] = count( get_term_ids_by_sport( 'lf_competition', $sport->slug ) );
@@ -5961,6 +6221,23 @@ class Admin {
 		$counts['league_levels'] = count( $this->get_league_level_terms() );
 
 		return $counts;
+	}
+
+	/** Count visible dashboard records without fetching every post ID. */
+	protected function count_dashboard_records( $post_type, $tax_query ) {
+		$query = new \WP_Query( array(
+			'post_type' => $post_type,
+			'post_status' => array( 'publish', 'private' ),
+			'perm' => 'readable',
+			'posts_per_page' => 1,
+			'fields' => 'ids',
+			'no_found_rows' => false,
+			'update_post_meta_cache' => false,
+			'update_post_term_cache' => false,
+			'tax_query' => $tax_query,
+		) );
+
+		return (int) $query->found_posts;
 	}
 
 	/**
@@ -5987,28 +6264,10 @@ class Admin {
 			$counts = array();
 
 			foreach ( array( 'lf_team' => 'teams', 'lf_match' => 'matches', 'lf_calendar_event' => 'calendar_events' ) as $post_type => $key ) {
-				$counts[ $key ] = count(
-					get_posts(
-						array(
-							'post_type'      => $post_type,
-							'post_status'    => array( 'publish', 'private' ),
-							'posts_per_page' => -1,
-							'fields'         => 'ids',
-							'tax_query'      => array(
-								array(
-									'taxonomy' => 'lf_sport',
-									'field'    => 'term_id',
-									'terms'    => array( $sport_id ),
-								),
-								array(
-									'taxonomy' => 'lf_league_level',
-									'field'    => 'term_id',
-									'terms'    => array( (int) $level->term_id ),
-								),
-							),
-						)
-					)
-				);
+				$counts[ $key ] = $this->count_dashboard_records( $post_type, array(
+					array( 'taxonomy' => 'lf_sport', 'field' => 'term_id', 'terms' => array( $sport_id ) ),
+					array( 'taxonomy' => 'lf_league_level', 'field' => 'term_id', 'terms' => array( (int) $level->term_id ) ),
+				) );
 			}
 
 			printf(
@@ -6298,6 +6557,9 @@ class Admin {
 		$options = array();
 
 		foreach ( get_posts( $args ) as $team ) {
+			if ( ! can_view_league_post( $team ) ) {
+				continue;
+			}
 			$options[ $team->ID ] = $team->post_title;
 		}
 
@@ -6344,6 +6606,9 @@ class Admin {
 		$options = array();
 
 		foreach ( get_posts( $args ) as $match ) {
+			if ( ! can_view_league_post( $match ) ) {
+				continue;
+			}
 			if ( ! $this->knockout_service->can_advance_to( $match_id, $match->ID ) && $match->ID !== $current ) {
 				continue;
 			}
@@ -6361,9 +6626,10 @@ class Admin {
 		}
 
 		// Keep a stored link to a match outside this list visible instead of silently dropping it.
-		if ( $current && ! isset( $options[ $current ] ) && 'lf_match' === get_post_type( $current ) && current_user_can( 'read_post', $current ) ) {
-			/* translators: %s: match title */
-			$options[ $current ] = sprintf( __( '%s (current link, no longer valid: choose again)', 'leagueflow' ), get_the_title( $current ) );
+		if ( $current && ! isset( $options[ $current ] ) ) {
+			$options[ $current ] = 'lf_match' === get_post_type( $current ) && can_view_league_post( $current )
+				? sprintf( /* translators: %s: match title */ __( '%s (current link, no longer valid: choose again)', 'leagueflow' ), get_the_title( $current ) )
+				: __( 'Current linked match (unavailable: ask a league administrator to review)', 'leagueflow' );
 		}
 
 		return $options;

@@ -136,6 +136,7 @@ class Assets {
 			'leagueflow_page_leagueflow-standings',
 			'leagueflow_page_leagueflow-brackets',
 			'leagueflow_page_leagueflow-settings',
+			'leagueflow_page_leagueflow-guide',
 			'edit-lf_league_level',
 			'edit-lf_competition',
 			'edit-lf_season',
@@ -195,7 +196,10 @@ class Assets {
 		);
 
 		if ( 'lf_sport' === $taxonomy ) {
-			$args['slug'] = get_option( Sports_Manager::ENABLED_SPORTS_OPTION, array( 'soccer' ) );
+			$args['slug'] = ( new Sports_Manager() )->get_enabled_sport_slugs();
+			if ( ! $args['slug'] ) {
+				return array();
+			}
 		}
 
 		$terms = 'lf_league_level' === $taxonomy ? get_league_level_terms() : get_terms( $args );
@@ -229,6 +233,7 @@ class Assets {
 			array(
 				'post_type'      => $post_type,
 				'post_status'    => array( 'publish', 'draft', 'pending', 'future', 'private' ),
+				'perm'           => 'readable',
 				'posts_per_page' => 100,
 				'orderby'        => 'title',
 				'order'          => 'ASC',
@@ -243,7 +248,7 @@ class Assets {
 					'sport' => get_post_primary_term_slug( $post->ID, 'lf_sport' ),
 				);
 			},
-			$posts
+			array_values( array_filter( $posts, static function ( $post ) { return can_view_league_post( $post ); } ) )
 		);
 	}
 }

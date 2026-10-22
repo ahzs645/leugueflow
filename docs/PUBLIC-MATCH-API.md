@@ -104,6 +104,7 @@ Example record (IDs/names here are illustrative):
     "homeScore": 3,
     "awayScore": 1,
     "outcome": "normal",
+    "outcomeLabel": "",
     "winnerTeamId": 123,
     "winnerOverride": null,
     "isDraw": false,
@@ -121,10 +122,28 @@ Scores are non-negative integers or `null`. `result` is null until the match is
 finished. A finished legacy record with missing/invalid scores has
 `complete:false`, unless a recorded forfeit or valid winner override resolves it.
 An explicit 0–0 is a valid draw. Outcomes are `normal`, `forfeit_home`,
-`forfeit_away`, or `double_forfeit`; forfeit_home means the **home team forfeited**.
-Forfeits do not manufacture a 3–0 score. A double forfeit has no winner unless
-staff explicitly recorded a valid winner override, following the plugin's
-existing winner precedence. Knockout penalties/rulings retain `winnerOverride`.
+`forfeit_away`, `double_forfeit`, or `unknown`. `forfeit_home` means the **home
+team forfeited**. `outcomeLabel` provides a localized explanation for a forfeit
+and is an empty string for a normal played result.
+
+Forfeits return `null` for both played scores, including when older numeric
+metadata is still present. The configured walkover score used by the standings
+is an administrative award and is not presented as a played score in this feed.
+A forfeit takes precedence over an older winner override: the non-forfeiting
+side wins, and a double forfeit has no winner. `winnerOverride` is `null` for
+forfeits. A normal knockout result decided by penalties or a ruling retains its
+valid `winnerOverride`, so a tied played score can still have a winner and
+`isDraw:false`.
+
+An unrecognized imported result type returns `outcome:"unknown"`, a localized
+`outcomeLabel` explaining that the result is unavailable, `complete:false`, and
+`null` scores, winner and winner override. It is not silently interpreted as a
+normal result. Consumers should use `complete` and handle unknown outcome values
+without assuming a win or draw. A played score needs two distinct participants;
+missing or duplicate participants leave those score fields `null`. Two copies
+of the same team cannot form a complete result. Reopening a match as Live, Scheduled, Postponed or Cancelled
+returns `result:null` in the event feed and removes it from the finished-results
+feed until staff finalize it again.
 
 Dates mean the **WordPress site's configured timezone**; the API does not change
 that setting or assume a particular campus timezone. `startDate` includes the
@@ -202,4 +221,9 @@ disposable WordPress 6.5/current installations in CI. It checks real REST
 validation and SQL pagination, date/taxonomy/team scopes, public-only totals,
 summer/winter offsets, tied kickoffs, unknown filters, zero scores, incomplete
 results, forfeits, overrides, immediate metadata edits and read-only methods.
+`tests/wordpress-result-display.php` additionally compares the feed with match
+cards, match lists, calendars and both bracket layouts. It covers forfeit
+precedence, stale played scores, unknown outcomes, tied knockout winners and
+reopened results. Calendar result labels and score details also have DOM
+coverage in `tests/calendar-results.cjs`.
 Never run its fixture program against an existing website.

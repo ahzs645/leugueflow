@@ -267,13 +267,14 @@ class Admin_Setup {
 		$sport_slug = sanitize_key( (string) ( $input['sport'] ?? '' ) );
 		$post_type  = sanitize_key( (string) ( $input['type'] ?? '' ) );
 		$taxonomy   = sanitize_key( (string) ( $input['taxonomy'] ?? '' ) );
-		$term_id    = absint( $input['term_id'] ?? 0 );
-		$record_ids = array_values( array_unique( array_filter( array_map( 'absint', (array) ( $input['record_ids'] ?? array() ) ) ) ) );
-		sort( $record_ids );
+		$raw_term   = $input['term_id'] ?? 0;
+		$term_id    = Match_Status::is_valid_score( $raw_term ) ? (int) $raw_term : 0;
 
 		if ( ! current_user_can( self::CAPABILITY ) ) {
 			return new \WP_Error( 'leagueflow_mapping_denied', __( 'You cannot change league records.', 'leagueflow' ) );
 		}
+		$record_ids = $this->validate_record_ids( $input['record_ids'] ?? array() );
+		if ( is_wp_error( $record_ids ) ) { return $record_ids; }
 
 		if ( ! in_array( $sport_slug, $this->sports_manager->get_enabled_sport_slugs(), true ) ) {
 			return new \WP_Error( 'leagueflow_mapping_sport', __( 'Choose an enabled sport.', 'leagueflow' ) );
@@ -321,6 +322,8 @@ class Admin_Setup {
 				$reason = __( 'it belongs to another sport', 'leagueflow' );
 			} elseif ( wp_get_object_terms( $record_id, $taxonomy, array( 'fields' => 'ids' ) ) ) {
 				$reason = __( 'it already has one (existing assignments are never replaced)', 'leagueflow' );
+			} elseif ( 'lf_match' === $post_type && $this->has_bracket_links( $record_id ) ) {
+				$reason = __( 'it is part of a linked knockout bracket. Review the linked matches together; remove bracket links before assigning a competition or season here, then restore compatible links.', 'leagueflow' );
 			}
 
 			if ( '' !== $reason ) {
@@ -344,6 +347,34 @@ class Admin_Setup {
 			'conflicts'  => $conflicts,
 			'token'      => substr( hash( 'sha256', implode( '|', $state ) . '|' . count( $conflicts ) ), 0, 24 ),
 		);
+	}
+
+	/** Reject a malformed selection instead of silently dropping or changing IDs. */
+	protected function validate_record_ids( $raw ) {
+		$error = new \WP_Error( 'leagueflow_mapping_invalid_records', __( 'The selected records are invalid. Nothing was changed; select them again and preview.', 'leagueflow' ) );
+		if ( ! is_array( $raw ) ) { return $error; }
+		foreach ( $raw as $id ) {
+			if ( ! Match_Status::is_valid_score( $id ) || (int) $id < 1 ) { return $error; }
+		}
+		$ids = array_values( array_unique( array_map( 'intval', $raw ) ) );
+		sort( $ids );
+		return $ids;
+	}
+
+	/** Changing one linked match's context would detach it from its bracket. */
+	protected function has_bracket_links( $match_id ) {
+		if ( (int) get_post_meta( $match_id, 'lf_next_match_id', true ) || (int) get_post_meta( $match_id, '_lf_home_advanced_from', true ) || (int) get_post_meta( $match_id, '_lf_away_advanced_from', true ) ) {
+			return true;
+		}
+		$feeders = get_posts( array(
+			'post_type' => 'lf_match',
+			'post_status' => array( 'publish', 'private', 'draft', 'pending', 'future' ),
+			'posts_per_page' => 1,
+			'fields' => 'ids',
+			'no_found_rows' => true,
+			'meta_query' => array( array( 'key' => 'lf_next_match_id', 'value' => $match_id, 'type' => 'NUMERIC' ) ),
+		) );
+		return (bool) $feeders;
 	}
 
 	/**
@@ -377,7 +408,8 @@ class Admin_Setup {
 		}
 
 		try {
-			$record_ids = array_filter( array_map( 'absint', (array) ( $input['record_ids'] ?? array() ) ) );
+			$record_ids = $this->validate_record_ids( $input['record_ids'] ?? array() );
+			if ( is_wp_error( $record_ids ) ) { return $record_ids; }
 
 			foreach ( $record_ids as $record_id ) {
 				clean_post_cache( $record_id );
@@ -466,8 +498,8 @@ class Admin_Setup {
 			'sport'      => sanitize_key( wp_unslash( $_POST['lf_map_sport'] ?? '' ) ),
 			'type'       => sanitize_key( wp_unslash( $_POST['lf_map_type'] ?? '' ) ),
 			'taxonomy'   => sanitize_key( wp_unslash( $_POST['lf_map_taxonomy'] ?? '' ) ),
-			'term_id'    => absint( wp_unslash( $_POST['lf_map_term'] ?? 0 ) ),
-			'record_ids' => array_map( 'absint', (array) wp_unslash( $_POST['lf_map_records'] ?? array() ) ),
+			'term_id'    => wp_unslash( $_POST['lf_map_term'] ?? 0 ),
+			'record_ids' => wp_unslash( $_POST['lf_map_records'] ?? array() ),
 		);
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 	}
@@ -676,6 +708,7 @@ class Admin_Setup {
 			'leagueflow_mapping_conflicts'   => __( 'Some selected records cannot be mapped. Nothing was changed.', 'leagueflow' ),
 			'leagueflow_mapping_cross_sport' => __( 'That competition or season belongs to another sport. Nothing was changed.', 'leagueflow' ),
 			'leagueflow_mapping_records'     => __( 'Select at least one record. Nothing was changed.', 'leagueflow' ),
+			'leagueflow_mapping_invalid_records' => __( 'The selected records are invalid. Nothing was changed; select them again and preview.', 'leagueflow' ),
 			'leagueflow_mapping_term'        => __( 'Choose the competition or season to assign. Nothing was changed.', 'leagueflow' ),
 			'leagueflow_mapping_busy'        => __( 'Another mapping was being applied, or the lock was unavailable. Nothing was changed; preview again.', 'leagueflow' ),
 		);

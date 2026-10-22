@@ -69,25 +69,97 @@
 
 	// "Select all listed" checkboxes tick or clear the named checkboxes in the same form.
 	function selectAll( box ) {
+		var form = box.form;
+		var name = box.getAttribute( 'data-leagueflow-select-all' );
+		if ( ! form ) {
+			return;
+		}
+		function records() {
+			return Array.prototype.filter.call( form.querySelectorAll( 'input[type="checkbox"]' ), function ( input ) {
+				return input.name === name && ! input.disabled;
+			} );
+		}
+		function sync() {
+			var inputs = records();
+			var checked = inputs.filter( function ( input ) { return input.checked; } ).length;
+			box.checked = inputs.length > 0 && checked === inputs.length;
+			box.indeterminate = checked > 0 && checked < inputs.length;
+			box.disabled = inputs.length === 0;
+		}
 		box.addEventListener( 'change', function () {
-			var form = box.form;
-			var name = box.getAttribute( 'data-leagueflow-select-all' );
+			records().forEach( function ( input ) {
+				input.checked = box.checked;
+			} );
+			sync();
+		} );
+		form.addEventListener( 'change', function ( event ) {
+			if ( event.target.name === name ) { sync(); }
+		} );
+		sync();
+	}
 
-			if ( ! form ) {
-				return;
-			}
-
-			Array.prototype.forEach.call( form.querySelectorAll( 'input[type="checkbox"]' ), function ( input ) {
-				if ( input.name === name && ! input.disabled ) {
-					input.checked = box.checked;
-				}
+	// Competition and season options belong to the selected sport. A native
+	// Filter submit must not carry the previous sport's selections forward.
+	function listSportFilter( select ) {
+		select.addEventListener( 'change', function () {
+			if ( ! select.form ) { return; }
+			[ 'lf_competition_filter', 'lf_season_filter', 'lf_batch' ].forEach( function ( name ) {
+				var field = select.form.elements.namedItem( name );
+				if ( field ) { field.value = ''; }
 			} );
 		} );
+	}
+
+	function resultPreview( preview ) {
+		var home = document.getElementById( 'lf_home_score' );
+		var away = document.getElementById( 'lf_away_score' );
+		var status = document.getElementById( 'lf_status' );
+		var outcome = document.getElementById( 'lf_outcome' );
+		var keep = document.getElementById( 'lf_keep_status' );
+		if ( ! home || ! away || ! status || ! outcome ) { return; }
+		var initial = preview.textContent;
+		function valid( field ) {
+			var value = field.value.trim();
+			if ( ! /^[0-9]+$/.test( value ) || field.validity && field.validity.badInput ) { return false; }
+			var digits = value.replace( /^0+/, '' ) || '0';
+			var max = preview.getAttribute( 'data-score-max' );
+			return ! max || digits.length < max.length || digits.length === max.length && digits <= max;
+		}
+		function text( attribute, fallback ) {
+			return preview.getAttribute( attribute ) || fallback || initial;
+		}
+		function update() {
+			var invalid = [ home, away ].some( function ( field ) {
+				return ( '' !== field.value.trim() || field.validity && field.validity.badInput ) && ! valid( field );
+			} );
+			var forfeited = [ 'forfeit_home', 'forfeit_away', 'double_forfeit' ].indexOf( outcome.value ) !== -1;
+			var complete = forfeited || valid( home ) && valid( away );
+			var automatic = [ '', 'scheduled' ].indexOf( status.value ) !== -1 && ! ( keep && keep.checked );
+			if ( invalid ) {
+				preview.textContent = text( 'data-invalid-text' );
+			} else if ( complete && ( automatic || status.value === 'finished' ) ) {
+				preview.textContent = text( 'data-final-text' );
+			} else if ( status.value === 'finished' && ! complete ) {
+				preview.textContent = text( 'data-incomplete-text' );
+			} else if ( status.value === 'scheduled' && automatic && ! complete ) {
+				preview.textContent = initial;
+			} else {
+				var selected = status.options[ status.selectedIndex ];
+				preview.textContent = text( 'data-status-text' ).replace( '%s', selected ? selected.textContent : status.value );
+			}
+		}
+		[ home, away, status, outcome, keep ].filter( Boolean ).forEach( function ( field ) {
+			field.addEventListener( 'input', update );
+			field.addEventListener( 'change', update );
+		} );
+		update();
 	}
 
 	function init() {
 		Array.prototype.forEach.call( document.querySelectorAll( 'select[data-leagueflow-searchable]' ), enhance );
 		Array.prototype.forEach.call( document.querySelectorAll( 'input[data-leagueflow-select-all]' ), selectAll );
+		Array.prototype.forEach.call( document.querySelectorAll( 'select[id^="leagueflow-filter-by-sport-"]' ), listSportFilter );
+		Array.prototype.forEach.call( document.querySelectorAll( '[data-leagueflow-result-preview]' ), resultPreview );
 	}
 
 	if ( 'loading' === document.readyState ) {

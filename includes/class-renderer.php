@@ -566,6 +566,7 @@ class Renderer {
 				'showMonth'      => __( 'Show full month', 'leagueflow' ),
 				'details'        => __( 'Details', 'leagueflow' ),
 				'vs'             => __( 'vs', 'leagueflow' ),
+				'score'          => __( 'Score', 'leagueflow' ),
 				'prev'           => __( 'Previous', 'leagueflow' ),
 				'next'           => __( 'Next', 'leagueflow' ),
 				'batchProgress'  => __( '%1$d of %2$d scheduled events loaded.', 'leagueflow' ),
@@ -766,7 +767,7 @@ class Renderer {
 				'kind'                 => 'match',
 				'kindLabel'            => __( 'Match', 'leagueflow' ),
 				'title'                => $title,
-				'description'          => '',
+				'description'          => $match['result_label'],
 				'day'                  => $datetime->format( 'Y-m-d' ),
 				'start'                => $datetime->format( 'c' ),
 				'end'                  => $end->format( 'c' ),
@@ -781,6 +782,9 @@ class Renderer {
 				'home'                 => $match['home_team'],
 				'away'                 => $match['away_team'],
 				'scoreline'            => $match['scoreline'],
+				'outcome'              => $match['outcome'],
+				'outcomeLabel'         => $match['outcome_label'],
+				'resultLabel'          => $match['result_label'],
 				'status'               => $match['status'] ? $match['status'] : 'scheduled',
 				'statusLabel'          => $match['status_label'],
 				'venue'                => $match['venue'],
@@ -1644,12 +1648,29 @@ class Renderer {
 		$home_score   = get_post_meta( $match->ID, 'lf_home_score', true );
 		$away_score   = get_post_meta( $match->ID, 'lf_away_score', true );
 		$status       = (string) get_post_meta( $match->ID, 'lf_status', true );
+		$outcome      = (string) get_post_meta( $match->ID, 'lf_outcome', true );
+		$is_knockout  = (bool) get_post_meta( $match->ID, 'lf_is_knockout', true );
 		$sport_slug   = $this->sports_manager->get_post_sport_slug( $match->ID );
 		$sport        = $this->sports_manager->get_definition( $sport_slug );
 
 		if ( ! $home_team_id && ! $away_team_id ) {
 			return array();
 		}
+
+		// Walkovers contribute configured standings points, but those awards
+		// are not played scores. Invalid imported scores must stay unavailable.
+		$played_result = '' === $outcome && $home_team_id && $away_team_id && $home_team_id !== $away_team_id;
+		$home_score = $played_result && Match_Status::is_valid_score( $home_score ) ? (string) (int) $home_score : '';
+		$away_score = $played_result && Match_Status::is_valid_score( $away_score ) ? (string) (int) $away_score : '';
+		$scoreline = '' !== $home_score && '' !== $away_score ? $home_score . ' - ' . $away_score : '';
+		$outcome_label = Match_Status::outcome_label( $outcome );
+		$winner_id = $is_knockout ? $this->knockout_service->determine_winner_team_id( $match->ID ) : 0;
+		$winner_label = $winner_id ? sprintf( /* translators: %s: winning team */ __( 'Winner: %s', 'leagueflow' ), get_the_title( $winner_id ) ) : '';
+		$result_label = implode( ' · ', array_filter( array( $outcome_label, $winner_label ) ) );
+		if ( 'finished' === $status && '' === $scoreline && '' === $result_label ) {
+			$result_label = __( 'Score unavailable', 'leagueflow' );
+		}
+		$status_labels = Match_Status::statuses();
 
 		return array(
 			'id'             => $match->ID,
@@ -1663,13 +1684,18 @@ class Renderer {
 			'away_logo'      => $away_team_id ? get_post_image( $away_team_id, 'thumbnail', 'leagueflow-match__logo' ) : '',
 			'home_score'     => $home_score,
 			'away_score'     => $away_score,
-			'scoreline'      => has_score( $home_score ) && has_score( $away_score ) ? score_to_int( $home_score ) . ' - ' . score_to_int( $away_score ) : '',
+			'scoreline'      => $scoreline,
+			'outcome'        => $outcome,
+			'outcome_label'  => $outcome_label,
+			'winner_team_id' => $winner_id,
+			'winner_label'   => $winner_label,
+			'result_label'   => $result_label,
 			'status'         => $status,
-			'status_label'   => $status ? ucfirst( $status ) : __( 'Scheduled', 'leagueflow' ),
+			'status_label'   => $status_labels[ $status ] ?? ( $status ? ucfirst( $status ) : $status_labels['scheduled'] ),
 			'datetime'       => format_match_datetime( $datetime_raw ),
 			'datetime_raw'   => $datetime_raw,
 			'venue'          => get_post_meta( $match->ID, 'lf_venue', true ),
-			'is_knockout'    => (bool) get_post_meta( $match->ID, 'lf_is_knockout', true ),
+			'is_knockout'    => $is_knockout,
 			'round_label'    => get_post_meta( $match->ID, 'lf_round_label', true ),
 			'sport_slug'     => $sport_slug,
 			'sport_label'    => $sport['label'],
