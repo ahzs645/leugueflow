@@ -12,3 +12,6 @@
 .leagueflow-editor-calendar { min-width: 0; max-width: 100%; }
 .leagueflow-editor-calendar .leagueflow-calendar { font-family: inherit; }
 .leagueflow-editor-calendar .leagueflow-calendar__dialog { z-index: 100001; }
+
+/* LeagueFlow tokens (design-tokens.css) load as a dependency of this stylesheet,
+   so the editor preview and the front end share colours, type and shape. */

@@ -409,6 +409,24 @@
 			return card;
 		}
 
+		function countLabel( count ) {
+			return count + ' ' + ( 1 === count ? ( strings.event || 'event' ) : ( strings.eventsPlural || 'events' ) );
+		}
+
+		// Count pill beside the panel title (selected day or month total).
+		var panelCount = null;
+		function setPanelCount( count ) {
+			if ( ! panelCount && panelTitle && panelTitle.parentNode ) {
+				panelCount = el( 'span', 'leagueflow-calendar__count' );
+				panelCount.setAttribute( 'data-calendar-panel-count', '' );
+				panelTitle.parentNode.insertBefore( panelCount, panelTitle.nextSibling );
+			}
+			if ( panelCount ) {
+				panelCount.hidden = null === count;
+				panelCount.textContent = null === count ? '' : countLabel( count );
+			}
+		}
+
 		function renderPanel( source ) {
 			panelList.textContent = '';
 			if ( panelWrap ) { panelWrap.hidden = 'list' === state.view || ( 'month' === state.view && 'sidebar' !== monthDisplay && ! state.selectedDay ); }
@@ -419,6 +437,7 @@
 				clearBtn.hidden = 'sidebar' !== monthDisplay && 'month' === state.view;
 
 				var selectedItems = eventsForDay( state.selectedDay, source );
+				setPanelCount( selectedItems.length );
 
 				if ( ! selectedItems.length ) {
 					panelList.appendChild( el( 'p', 'leagueflow-calendar__empty', strings.noEventsDay || 'No events on this day.' ) );
@@ -437,6 +456,8 @@
 			var monthName = ( monthNames[ state.date.getMonth() ] || '' ) + ' ' + state.date.getFullYear();
 			var monthItems = eventsForMonth( state.date, source );
 			panelTitle.textContent = sprintf( strings.monthSchedule || 'Schedule in %s', monthName );
+
+			setPanelCount( 'list' === state.view ? null : monthItems.length );
 
 			if ( 'list' === state.view ) {
 				panelTitle.textContent = strings.details || 'Details';
@@ -517,9 +538,11 @@
 				day.addEventListener( 'click', function () {
 					state.fullMonth = false;
 					state.selectedDay = state.selectedDay === this.dataset.day ? null : this.dataset.day;
-					state.date = parseDay( this.dataset.day );
+					var tappedDay = this.dataset.day;
+					state.date = parseDay( tappedDay );
 					render();
-					var selectedControl = root.querySelector( '[data-day="' + key + '"]' );
+					// `key` is the loop variable (last cell); refocus the day actually tapped.
+					var selectedControl = root.querySelector( '[data-day="' + tappedDay + '"]' );
 					if ( selectedControl ) { selectedControl.focus(); }
 				} );
 
@@ -562,8 +585,11 @@
 			keys.forEach( function ( key ) {
 				var group = el( 'section', 'leagueflow-calendar__list-group' );
 				var header = el( 'div', 'leagueflow-calendar__list-date' );
+				var rule = el( 'span', 'leagueflow-calendar__list-rule' );
+				rule.setAttribute( 'aria-hidden', 'true' );
 				header.appendChild( el( 'h4', null, formatDateKey( key, monthNames, weekdays ) ) );
-				header.appendChild( el( 'span', null, grouped[ key ].length + ' ' + ( 1 === grouped[ key ].length ? ( strings.event || 'event' ) : ( strings.eventsPlural || 'events' ) ) ) );
+				header.appendChild( rule );
+				header.appendChild( el( 'span', 'leagueflow-calendar__count', countLabel( grouped[ key ].length ) ) );
 				group.appendChild( header );
 
 				grouped[ key ].forEach( function ( event ) {
@@ -846,6 +872,7 @@
 				stage.textContent = '';
 				stage.appendChild( el( 'p', 'leagueflow-calendar__empty', statusText ) );
 				panelList.textContent = statusText;
+				setPanelCount( null );
 			}
 			root.classList.add( 'is-ready' );
 		}

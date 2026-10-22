@@ -31,10 +31,18 @@ class Assets {
 	 * @return void
 	 */
 	public function register_assets() {
+		// Semantic tokens load first; every LeagueFlow stylesheet reads them.
+		wp_register_style(
+			'leagueflow-tokens',
+			LEAGUEFLOW_URL . 'assets/css/design-tokens.css',
+			array(),
+			$this->asset_version( 'assets/css/design-tokens.css' )
+		);
+
 		wp_register_style(
 			'leagueflow-frontend',
 			LEAGUEFLOW_URL . 'assets/css/frontend.css',
-			array(),
+			array( 'leagueflow-tokens' ),
 			$this->asset_version( 'assets/css/frontend.css' )
 		);
 
@@ -56,7 +64,7 @@ class Assets {
 		wp_register_style(
 			'leagueflow-editor',
 			LEAGUEFLOW_URL . 'assets/css/editor.css',
-			array( 'wp-edit-blocks' ),
+			array( 'wp-edit-blocks', 'leagueflow-tokens' ),
 			$this->asset_version( 'assets/css/editor.css' )
 		);
 
