@@ -590,8 +590,8 @@ class Renderer {
 				'cancelled'      => __( 'Cancelled', 'leagueflow' ),
 				'postponed'      => __( 'Postponed', 'leagueflow' ),
 				'viewPoster'     => __( 'View poster full size', 'leagueflow' ),
-				'backToEvent'    => __( 'Back to event details', 'leagueflow' ),
-				'openPoster'     => __( 'Open poster in a new tab', 'leagueflow' ),
+				'backToEvent'    => __( 'Back to details', 'leagueflow' ),
+				'openPoster'     => __( 'Open in new tab', 'leagueflow' ),
 				'hasPoster'      => __( 'Poster', 'leagueflow' ),
 			),
 		);

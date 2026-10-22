@@ -2569,9 +2569,15 @@ body:not(.home) .unbc-page-body > .wp-block-post-content > .leagueflow-portal.al
 		color: var(--lf-primary-foreground);
 	}
 
+	/* The green fill already marks the selected day; no extra today circle. */
 	.leagueflow-calendar__day.is-selected.is-today .leagueflow-calendar__day-num {
+		background: none;
+		color: inherit;
+	}
+
+	/* Sport dots would vanish on the green fill. */
+	.leagueflow-calendar__day.is-selected .leagueflow-calendar__day-event {
 		background: var(--lf-primary-foreground);
-		color: var(--lf-primary);
 	}
 
 	.leagueflow-calendar__day-summary {
@@ -3570,16 +3576,41 @@ body:not(.home) .unbc-page-body > .wp-block-post-content > .leagueflow-portal.al
 	display: none;
 }
 
+/* A quiet row of text links above the full poster, clear of the close button. */
 .leagueflow-calendar__poster-bar {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 0.5rem;
-	margin: 0 2.5rem 0.75rem 0;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.25rem 1rem;
+	min-height: 2.75rem;
+	margin: 0 3rem 0.5rem 0;
 }
 
-button.leagueflow-calendar__dialog-action {
+.leagueflow-calendar__poster-link {
+	display: inline-flex;
+	align-items: center;
+	min-height: 2.75rem;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--lf-card-foreground);
 	font: inherit;
+	font-size: 0.9rem;
+	font-weight: 600;
+	text-decoration: none;
+	text-underline-offset: 0.2em;
 	cursor: pointer;
+}
+
+.leagueflow-calendar .leagueflow-calendar__poster-link:hover {
+	color: var(--lf-primary);
+	text-decoration: underline;
+}
+
+.leagueflow-calendar__poster-link:focus-visible {
+	outline: 2px solid var(--lf-ring, var(--lf-primary));
+	outline-offset: 2px;
 }
 
 .leagueflow-calendar__poster-full {
@@ -3609,9 +3640,3 @@ button.leagueflow-calendar__dialog-action {
 	border: 1px solid var(--lf-border);
 }
 
-@media (max-width: 760px) {
-	.leagueflow-calendar__poster-bar .leagueflow-calendar__dialog-action {
-		flex: 1 1 100%;
-		min-height: 44px;
-	}
-}

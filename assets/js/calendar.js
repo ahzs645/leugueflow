@@ -929,9 +929,9 @@
 			var viewer = el( 'div', 'leagueflow-calendar__poster-viewer' );
 			viewer.hidden = true;
 			var bar = el( 'div', 'leagueflow-calendar__poster-bar' );
-			var back = el( 'button', 'leagueflow-calendar__dialog-action', strings.backToEvent || 'Back to event details' );
+			var back = el( 'button', 'leagueflow-calendar__poster-link', '‹ ' + ( strings.backToEvent || 'Back to details' ) );
 			back.type = 'button';
-			var tab = el( 'a', 'leagueflow-calendar__dialog-action', strings.openPoster || 'Open poster in a new tab' );
+			var tab = el( 'a', 'leagueflow-calendar__poster-link', strings.openPoster || 'Open in new tab' );
 			tab.href = poster.full;
 			tab.target = '_blank';
 			tab.rel = 'noopener noreferrer';

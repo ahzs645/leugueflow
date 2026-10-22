@@ -17,7 +17,7 @@ const data = {
     weekdays: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
     weekdaysShort: ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'],
   },
-  strings: { viewPoster: 'View poster full size', backToEvent: 'Back to event details', openPoster: 'Open poster in a new tab' },
+  strings: { viewPoster: 'View poster full size', backToEvent: 'Back to details', openPoster: 'Open in new tab' },
   events: [
     { ...base, id: 'event-1', postId: 1, title: 'Spring tournament', poster },
     { ...base, id: 'event-2', postId: 2, title: 'Open gym', poster: null },
@@ -67,8 +67,8 @@ const markup = `<div data-leagueflow-calendar>
   assert.ok(article.classList.contains('is-viewing-poster'));
   assert.equal(viewer.querySelector('img').getAttribute('src'), poster.full);
   assert.equal(viewer.querySelector('img').alt, 'Spring tournament poster');
-  assert.equal(d.activeElement.textContent, 'Back to event details', 'Focus moves to the way back.');
-  const tab = Array.from(viewer.querySelectorAll('a')).find(link => link.textContent === 'Open poster in a new tab');
+  assert.equal(d.activeElement.textContent, '‹ Back to details', 'Focus moves to the way back.');
+  const tab = Array.from(viewer.querySelectorAll('a')).find(link => link.textContent === 'Open in new tab');
   assert.equal(tab.href, poster.full);
 
   key('Escape');
