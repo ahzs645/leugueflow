@@ -139,13 +139,21 @@ class Settings {
 		$slug_keys        = array( 'team_slug', 'match_slug', 'competition_slug', 'season_slug' );
 		$changed_rewrites = false;
 
-		$sanitized['points_win']         = max( 0, absint( $input['points_win'] ?? $current['points_win'] ) );
-		$sanitized['points_draw']        = max( 0, absint( $input['points_draw'] ?? $current['points_draw'] ) );
-		$sanitized['points_loss']        = max( 0, absint( $input['points_loss'] ?? $current['points_loss'] ) );
-		$sanitized['forfeit_score_winner'] = max( 0, absint( $input['forfeit_score_winner'] ?? $current['forfeit_score_winner'] ) );
-		$sanitized['min_rest_days']              = max( 0, absint( $input['min_rest_days'] ?? $current['min_rest_days'] ) );
-		$sanitized['min_days_between_rematch']   = max( 0, absint( $input['min_days_between_rematch'] ?? $current['min_days_between_rematch'] ) );
-		$sanitized['max_games_per_day_per_team'] = max( 0, absint( $input['max_games_per_day_per_team'] ?? $current['max_games_per_day_per_team'] ) );
+		$numbers = self::scoring_number_labels() + array(
+			'min_rest_days'              => __( 'Preferred rest days', 'leagueflow' ),
+			'min_days_between_rematch'   => __( 'Days between rematches', 'leagueflow' ),
+			'max_games_per_day_per_team' => __( 'Max games per team per day', 'leagueflow' ),
+		);
+		foreach ( $numbers as $key => $label ) {
+			$value = $input[ $key ] ?? $current[ $key ];
+			$value = is_string( $value ) ? trim( $value ) : $value;
+			$sanitized[ $key ] = $current[ $key ];
+			if ( Match_Status::is_valid_score( $value ) ) {
+				$sanitized[ $key ] = (int) $value;
+			} else {
+				add_settings_error( 'leagueflow_settings', 'leagueflow_invalid_' . $key, sprintf( /* translators: %s: setting label */ __( '%s must be a non-negative whole number. Its previous value was kept.', 'leagueflow' ), $label ) );
+			}
+		}
 		$sanitized['date_time_format']   = sanitize_text_field( $input['date_time_format'] ?? $current['date_time_format'] );
 		$sanitized['show_logos']         = bool_to_int( $input['show_logos'] ?? 0 );
 		$sanitized['show_player_photos'] = bool_to_int( $input['show_player_photos'] ?? 0 );
@@ -161,17 +169,28 @@ class Settings {
 		$sanitized['cleanup_on_uninstall'] = bool_to_int( $input['cleanup_on_uninstall'] ?? 0 );
 
 		foreach ( $slug_keys as $key ) {
-			$sanitized[ $key ] = sanitize_title( $input[ $key ] ?? $current[ $key ] );
-			if ( $sanitized[ $key ] !== $current[ $key ] ) {
-				$changed_rewrites = true;
+			$raw = $input[ $key ] ?? $current[ $key ];
+			$sanitized[ $key ] = is_string( $raw ) ? sanitize_title( $raw ) : '';
+			if ( '' === $sanitized[ $key ] ) {
+				$sanitized[ $key ] = $current[ $key ];
+				add_settings_error( 'leagueflow_settings', 'leagueflow_empty_' . $key, __( 'Public URL slugs cannot be blank. The previous value was kept.', 'leagueflow' ) );
 			}
+		}
+		if ( count( array_unique( array_intersect_key( $sanitized, array_flip( $slug_keys ) ) ) ) !== count( $slug_keys ) ) {
+			foreach ( $slug_keys as $key ) {
+				$sanitized[ $key ] = $current[ $key ];
+			}
+			add_settings_error( 'leagueflow_settings', 'leagueflow_duplicate_slugs', __( 'Teams, matches, competitions and seasons need different URL slugs. The previous slugs were kept.', 'leagueflow' ) );
+		}
+		foreach ( $slug_keys as $key ) {
+			$changed_rewrites = $changed_rewrites || $sanitized[ $key ] !== $current[ $key ];
 		}
 
 		$tie_breakers = array();
 
 		if ( ! empty( $input['tie_breakers'] ) && is_array( $input['tie_breakers'] ) ) {
 			foreach ( $input['tie_breakers'] as $value ) {
-				$value = sanitize_key( $value );
+				$value = is_string( $value ) ? sanitize_key( $value ) : '';
 				if ( isset( $this->tie_breakers[ $value ] ) && ! in_array( $value, $tie_breakers, true ) ) {
 					$tie_breakers[] = $value;
 				}
@@ -197,6 +216,55 @@ class Settings {
 		}
 
 		return $sanitized;
+	}
+
+	/** Names shared by the defaults and per-sport scoring editors. */
+	public static function scoring_number_labels() {
+		return array(
+			'points_win'           => __( 'Points for a win', 'leagueflow' ),
+			'points_draw'          => __( 'Points for a draw (tie)', 'leagueflow' ),
+			'points_loss'          => __( 'Points for a loss', 'leagueflow' ),
+			'forfeit_score_winner' => __( 'Forfeit walkover score', 'leagueflow' ),
+		);
+	}
+
+	/**
+	 * Validate a submitted override before replacing its saved values.
+	 * Blank numeric values and an empty tie-breaker order mean inheritance.
+	 *
+	 * @param mixed $values Submitted override.
+	 * @return array<int, string> Validation errors.
+	 */
+	public static function validate_rule_override( $values ) {
+		if ( ! is_array( $values ) ) {
+			return array( __( 'Scoring values must be submitted as a form.', 'leagueflow' ) );
+		}
+		$errors = array();
+		foreach ( self::scoring_number_labels() as $key => $label ) {
+			if ( ! array_key_exists( $key, $values ) ) {
+				continue;
+			}
+			$value = is_string( $values[ $key ] ) ? trim( $values[ $key ] ) : $values[ $key ];
+			if ( '' !== $value && ! Match_Status::is_valid_score( $value ) ) {
+				$errors[] = sprintf( /* translators: %s: scoring setting */ __( '%s must be a non-negative whole number, or blank to inherit.', 'leagueflow' ), $label );
+			}
+		}
+		if ( array_key_exists( 'tie_breakers', $values ) ) {
+			if ( ! is_array( $values['tie_breakers'] ) ) {
+				$errors[] = __( 'Choose a valid tie-breaker order.', 'leagueflow' );
+			} else {
+				$seen = array();
+				foreach ( $values['tie_breakers'] as $value ) {
+					if ( '' === $value ) { continue; }
+					if ( ! is_string( $value ) || ! in_array( $value, tie_breaker_keys(), true ) || in_array( $value, $seen, true ) || count( $seen ) >= 4 ) {
+						$errors[] = __( 'Choose each tie-breaker at most once, with no more than four priorities.', 'leagueflow' );
+						break;
+					}
+					$seen[] = $value;
+				}
+			}
+		}
+		return $errors;
 	}
 
 	/**

@@ -25,9 +25,32 @@ class Post_Types {
 		add_filter( 'rest_post_search_query', array( $this, 'filter_rest_directory_search' ) );
 		add_filter( 'rest_pre_insert_lf_player', array( $this, 'validate_rest_identity' ), 10, 2 );
 		add_filter( 'rest_pre_insert_lf_team', array( $this, 'validate_rest_identity' ), 10, 2 );
+		add_filter( 'rest_pre_insert_lf_match', array( $this, 'protect_rest_match_workflow' ), 10, 2 );
 		add_action( 'init', array( $this, 'register_meta' ) );
 		add_action( 'init', __NAMESPACE__ . '\\ensure_player_team_details_migration', 20 );
 		add_filter( 'use_block_editor_for_post_type', array( $this, 'use_classic_editor_for_supported_types' ), 10, 2 );
+	}
+
+	/**
+	 * Generic post metadata writes are sequential and bypass result locks, stale
+	 * form checks and participant validation. Keep match workflow fields on the
+	 * protected editor/referee paths, even if an integration enables custom-fields.
+	 * Ordinary post content and publication edits remain supported.
+	 */
+	public function protect_rest_match_workflow( $prepared_post, $request ) {
+		if ( is_wp_error( $prepared_post ) ) { return $prepared_post; }
+		$meta = $request->get_param( 'meta' );
+		$protected = array( 'lf_home_team_id', 'lf_away_team_id', 'lf_home_score', 'lf_away_score', 'lf_status', 'lf_status_changed_at', 'lf_outcome', 'lf_is_knockout', 'lf_winner_team_id', 'lf_next_match_id', 'lf_next_match_slot', 'lf_round_order', 'lf_round_label', 'lf_match_datetime', 'lf_venue', 'lf_duration_minutes', Field_Availability_Manager::META_AVAILABILITY_ID, Field_Availability_Manager::META_SCHEDULE_SOURCE, Field_Availability_Manager::META_SCHEDULED_AT );
+		$blocked = is_array( $meta ) && (bool) array_intersect( array_keys( $meta ), $protected );
+		foreach ( array( 'lf_sport', 'lf_league_level', 'lf_competition', 'lf_season' ) as $name ) {
+			$taxonomy = get_taxonomy( $name );
+			$param = $taxonomy && $taxonomy->rest_base ? $taxonomy->rest_base : $name;
+			if ( $request->has_param( $param ) ) { $blocked = true; }
+		}
+		if ( $blocked ) {
+			return new \WP_Error( 'leagueflow_match_workflow_required', __( 'Use the LeagueFlow match editor or assigned referee result form to change scores, participants, match status, scheduling or bracket context. Generic WordPress REST writes cannot safely save these fields.', 'leagueflow' ), array( 'status' => 400 ) );
+		}
+		return $prepared_post;
 	}
 
 	/** Keep the REST directory consistent with the restricted portal/team pages. */
@@ -344,7 +367,7 @@ class Post_Types {
 		$this->register_string_meta( 'lf_match', Field_Availability_Manager::META_SCHEDULED_AT, $shared_args );
 
 		foreach ( Sports_Manager::get_all_match_meta_keys() as $meta_key ) {
-			$this->register_string_meta( 'lf_match', $meta_key, $shared_args );
+			register_post_meta( 'lf_match', $meta_key, array_merge( $shared_args, array( 'type' => 'string', 'sanitize_callback' => 'sanitize_textarea_field' ) ) );
 		}
 
 		$this->register_string_meta( 'lf_calendar_event', 'lf_event_start_datetime', $shared_args );

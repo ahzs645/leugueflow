@@ -1,5 +1,23 @@
 # LeagueFlow admin workflow
 
+## Current scoring and setup behavior (1.1.1 review)
+
+The current changes and acceptance results are documented in
+[Scoring and admin review](SCORING-ADMIN-REVIEW-2026-10-21.md). Saving complete scores
+on a Scheduled match now automatically finishes it; the keep-status checkbox
+preserves deliberate provisional/reopened states. Live, Postponed and Cancelled
+remain explicit. Result corrections synchronize eligible linked bracket fixtures.
+
+Lists now preserve the full sport/level/competition/season scope, match lifecycle
+has its own filter, and per-sport rules inherit by field with explicit zero values.
+Competition/season ownership is checked before edits can mix sports.
+
+The older audit and installed-site evidence below are retained as historical
+records. They do **not** mean the 1.1.1 changes have been installed or browser-verified
+on that site. The current review used fresh disposable WordPress installations.
+
+## Historical admin audit
+
 This document describes the intended administrator journey and tracks every
 finding from the 2026-10-14 read-only admin coherence audit (local Intramurals
 copy, LeagueFlow 1.0.3, canonical `7483fc0`). Work is delivered in reviewed

@@ -26,6 +26,7 @@ class Admin_Guide {
 					__( 'In Sports, enable the supported sports you run. A competition is a league or tournament within a sport; a league level separates divisions such as recreational and competitive.', 'leagueflow' ),
 					__( 'In Competitions, create the league and select its sport. In Seasons, create the term (for example, Fall 2026) and select its sport. Mark the appropriate season Current when you want Current season views to use it.', 'leagueflow' ),
 					__( 'Assign teams and matches to the same sport, competition, season and league level. A new season does not copy teams or fixtures automatically. Use Generate fixtures after reviewing the intended team list.', 'leagueflow' ),
+					__( 'In Settings, leave a sport or competition rule blank to inherit its parent value. Enter 0 only when you intend a zero. Points, tie-breakers and the forfeit score can be overridden independently.', 'leagueflow' ),
 					__( 'Run Setup check to find missing sport and league context. Check the calendar block season setting: All seasons and Current season are different choices.', 'leagueflow' ),
 				),
 			),
@@ -36,7 +37,8 @@ class Admin_Guide {
 				'steps' => array(
 					__( 'Choose the two teams and enter Match date/time in the website timezone. Publish the match now so a future fixture is visible. The WordPress publication date controls when the post becomes public; it is separate from the match date.', 'leagueflow' ),
 					__( 'Enter both scores, including an explicit 0 for a scoreless team. For volleyball, use sets won in the main score fields; set-by-set details are optional notes.', 'leagueflow' ),
-					__( 'Use Save match as final result when play is complete. Saving scores while the match is Scheduled or Live does not add it to standings. For a forfeit, choose the appropriate outcome.', 'leagueflow' ),
+					__( 'Saving both valid scores on a Scheduled match automatically marks it Finished. A forfeit outcome does the same without requiring played scores. Use Keep the selected status if you are deliberately recording provisional scores. Live, Postponed and Cancelled keep their selected status; use Save match as final result when play is complete.', 'leagueflow' ),
+					__( 'Correct a Finished result by editing its scores and saving. To reopen it as Scheduled, select that status and Keep the selected status. An unplayed next round follows a corrected winner; a started next round is preserved and flagged for staff review.', 'leagueflow' ),
 					__( 'If standings look empty, open Standings and review the result diagnostics. Confirm Finished status, publication, both teams, valid scores or a forfeit, and the same season/league filters. Knockout matches do not count toward league standings.', 'leagueflow' ),
 				),
 			),
@@ -58,7 +60,7 @@ class Admin_Guide {
 				'steps' => array(
 					__( 'An administrator creates the official’s WordPress account with the LeagueFlow Referee role. In each match, select that person under Assigned referees.', 'leagueflow' ),
 					__( 'Leave score entry unchecked for roster access only. Enable it per match when that referee should submit the final score. The referee sees only the playing details and acknowledgement status for the two assigned teams.', 'leagueflow' ),
-					__( 'Referees sign in and open Referee desk. You may also place [leagueflow_referee] on a page. Submitted final results are recorded with the submitting user and time; staff handle corrections and knockout progression.', 'leagueflow' ),
+					__( 'Referees sign in and open Referee desk. You may also place [leagueflow_referee] on a page. Submitted final results are recorded with the submitting user and time. Eligible linked knockout matches advance automatically; staff handle corrections and any bracket review notice.', 'leagueflow' ),
 				),
 			),
 			array(

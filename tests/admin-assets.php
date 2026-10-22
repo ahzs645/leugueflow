@@ -21,6 +21,7 @@ namespace {
 		'leagueflow_page_leagueflow-fixtures'   => true,
 		'leagueflow_page_leagueflow-utilities'  => true,
 		'leagueflow_page_leagueflow-fields'     => true,
+		'leagueflow_page_leagueflow-guide'      => true,
 		'toplevel_page_leagueflow'              => true,
 		'leagueflow_page_leagueflow-sport-soccer-standings' => true,
 		'edit-lf_join_request'                  => true,

@@ -381,9 +381,12 @@
 			if ( 'match' === event.source ) {
 				var teams = el( 'p', 'leagueflow-calendar__event-teams' );
 				teams.appendChild( el( 'span', null, event.home ) );
-				teams.appendChild( el( 'strong', 'leagueflow-calendar__event-score', event.scoreline ? event.scoreline : ( strings.vs || 'vs' ) ) );
+				teams.appendChild( el( 'strong', 'leagueflow-calendar__event-score', event.scoreline ? event.scoreline : ( event.resultLabel ? '—' : ( strings.vs || 'vs' ) ) ) );
 				teams.appendChild( el( 'span', null, event.away ) );
 				card.appendChild( teams );
+				if ( event.resultLabel ) {
+					card.appendChild( el( 'p', 'leagueflow-calendar__event-result', event.resultLabel ) );
+				}
 			} else {
 				card.appendChild( el( 'p', 'leagueflow-calendar__event-title', event.title ) );
 
@@ -914,6 +917,7 @@
 			addDetail( strings.level || 'Level', event.leagueLevelLabel );
 			addDetail( 'Competition', event.competition );
 			addDetail( 'Season', event.season );
+			if ( 'match' === event.source ) { addDetail( strings.score || 'Score', event.scoreline ); }
 			if ( false !== config.showCost ) { addDetail( strings.cost || 'Cost', event.cost ); }
 
 			if ( event.registrationRequired ) {

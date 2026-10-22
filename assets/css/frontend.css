@@ -156,6 +156,17 @@
 	display: block;
 }
 
+.leagueflow-match-card__result {
+	text-align: center;
+	font-weight: 600;
+}
+
+.leagueflow-match-row__result,
+.leagueflow-bracket__result {
+	margin: 0.75rem 0;
+	font-weight: 600;
+}
+
 .leagueflow-match-card__details {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -1708,6 +1719,12 @@ body:not(.home) .unbc-page-body > .wp-block-post-content > .leagueflow-portal.al
 	margin: 0.35rem 0 0;
 	color: var(--leagueflow-muted);
 	font-size: 0.82rem;
+}
+
+.leagueflow-calendar__event-result {
+	margin: 0.35rem 0 0;
+	font-size: 0.82rem;
+	font-weight: 600;
 }
 
 .leagueflow-calendar__list-view {

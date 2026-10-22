@@ -35,7 +35,7 @@
 .leagueflow-settings-grid,
 .leagueflow-settings-secondary {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+	grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
 	gap: 12px;
 	align-items: start;
 }
@@ -212,6 +212,7 @@
 
 .leagueflow-player-memberships__add {
 	display: flex;
+	flex-wrap: wrap;
 	align-items: center;
 	gap: 10px;
 	margin-top: 12px;
@@ -791,6 +792,38 @@
 
 .leagueflow-filter-bar select {
 	max-width: 100%;
+}
+
+/* Native list filters wrap as a group when sport, level, status and season are shown. */
+.post-type-lf_match .tablenav.top,
+.post-type-lf_team .tablenav.top,
+.post-type-lf_player .tablenav.top,
+.post-type-lf_calendar_event .tablenav.top {
+	height: auto;
+	min-height: 30px;
+}
+
+.post-type-lf_match .tablenav .actions,
+.post-type-lf_team .tablenav .actions,
+.post-type-lf_player .tablenav .actions,
+.post-type-lf_calendar_event .tablenav .actions {
+	max-width: 100%;
+	box-sizing: border-box;
+}
+
+.post-type-lf_match .tablenav .actions select,
+.post-type-lf_team .tablenav .actions select,
+.post-type-lf_player .tablenav .actions select,
+.post-type-lf_calendar_event .tablenav .actions select {
+	max-width: min(230px, 100%);
+	margin-bottom: 4px;
+}
+
+#leagueflow-result-preview {
+	border-left: 3px solid #2271b1;
+	padding: 6px 10px;
+	background: #f0f6fc;
+	max-width: 48em;
 }
 
 .leagueflow-rule-overrides,

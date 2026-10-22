@@ -349,7 +349,11 @@ try {
 	}
 } finally {
 	if ( is_resource( $server ) ) { proc_terminate( $server ); proc_close( $server ); }
-	@unlink( $guard_file );
+	if ( file_exists( $guard_file ) && ! unlink( $guard_file ) ) {
+		throw new RuntimeException( 'Could not remove the portal HTTP test guard: ' . $guard_file );
+	}
+	clearstatcache( true, $guard_file );
+	lfh_assert( ! file_exists( $guard_file ), 'The portal HTTP test guard was left installed after cleanup.' );
 	if ( ! getenv( 'LEAGUEFLOW_HTTP_DEBUG' ) ) { foreach ( (array) glob( $lfh_tmp . '/*' ) as $tmp_file ) { @unlink( $tmp_file ); } @rmdir( $lfh_tmp ); }
 }
 if ( ! empty( $failures ) ) { WP_CLI::error( implode( "\n", $failures ) ); }

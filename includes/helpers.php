@@ -1148,7 +1148,7 @@ const RULE_OVERRIDES_OPTION = 'leagueflow_rule_overrides';
  * @return array<int, string>
  */
 function rule_keys() {
-	return array( 'points_win', 'points_draw', 'points_loss', 'tie_breakers' );
+	return array( 'points_win', 'points_draw', 'points_loss', 'forfeit_score_winner', 'tie_breakers' );
 }
 
 /**
@@ -1173,9 +1173,10 @@ function sanitize_rule_override( $values ) {
 		return $clean;
 	}
 
-	foreach ( array( 'points_win', 'points_draw', 'points_loss' ) as $key ) {
-		if ( isset( $values[ $key ] ) && '' !== $values[ $key ] && is_numeric( $values[ $key ] ) ) {
-			$clean[ $key ] = max( 0, (int) $values[ $key ] );
+	foreach ( array( 'points_win', 'points_draw', 'points_loss', 'forfeit_score_winner' ) as $key ) {
+		$value = isset( $values[ $key ] ) && is_string( $values[ $key ] ) ? trim( $values[ $key ] ) : ( $values[ $key ] ?? null );
+		if ( Match_Status::is_valid_score( $value ) ) {
+			$clean[ $key ] = (int) $value;
 		}
 	}
 
@@ -1183,7 +1184,7 @@ function sanitize_rule_override( $values ) {
 		$order = array();
 
 		foreach ( $values['tie_breakers'] as $value ) {
-			$value = sanitize_key( (string) $value );
+			$value = is_string( $value ) ? sanitize_key( $value ) : '';
 
 			if ( in_array( $value, tie_breaker_keys(), true ) && ! in_array( $value, $order, true ) ) {
 				$order[] = $value;
@@ -1280,6 +1281,7 @@ function get_effective_rules( $sport_slug = '', $competition_id = 0 ) {
 		'points_win'   => (int) get_setting( 'points_win', 3 ),
 		'points_draw'  => (int) get_setting( 'points_draw', 1 ),
 		'points_loss'  => (int) get_setting( 'points_loss', 0 ),
+		'forfeit_score_winner' => (int) get_setting( 'forfeit_score_winner', 3 ),
 		'tie_breakers' => (array) get_setting( 'tie_breakers', defaults()['tie_breakers'] ),
 	);
 	$source         = array_fill_keys( array_keys( $values ), 'global' );

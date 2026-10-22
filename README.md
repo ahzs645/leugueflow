@@ -2,6 +2,30 @@
 
 LeagueFlow is a classic WordPress plugin for running multi-sport leagues with teams, players, fixtures, derived standings, and knockout brackets. It uses WordPress-native admin screens, metaboxes, taxonomies, dynamic Gutenberg blocks, and shortcodes.
 
+## Scoring and admin workflow fixes (1.1.1)
+
+Saving both valid scores on a **Scheduled** match now marks it **Finished** and
+updates derived standings. Explicit zeros are valid; blank scores stay missing.
+A forfeit can finish without invented played scores. **Live**, **Postponed** and
+**Cancelled** remain intentional states. The editor's keep-status control supports
+provisional scores and reopening, and the final-result action remains available.
+
+Linked knockout fixtures follow completed results, corrections and reopening
+when their target is still unplayed. Started targets are preserved and flagged
+for staff review. Referee final submissions use the same progression with limited
+permissions. Public cards, lists, calendars, brackets and result feeds agree on
+forfeits, tied knockout winners and incomplete legacy scores.
+
+Admin navigation preserves sport/level/competition/season context and separates
+match lifecycle from WordPress publication status. Sport setup preserves staff
+labels, validates context ownership and uses per-field inheritance for points,
+tie-breakers and forfeit scores. Result and scheduling saves verify all related
+writes and roll back a failed operation.
+
+See [the scoring/admin review](docs/SCORING-ADMIN-REVIEW-2026-10-21.md) for behavior,
+verification, integration boundaries and rollout guidance. The version is prepared
+for review; a branch or PR does not publish an update or install it on a website.
+
 ## Intramurals and calendar update (1.1.0)
 
 The calendar now loads the visible date range and completes paginated month/week/day
@@ -98,7 +122,9 @@ Native integration sets `LEAGUEFLOW_TEST_PACKAGE` to the built ZIP and runs
 `wp eval-file tests/wordpress-security.php`, then
 `LEAGUEFLOW_DISPOSABLE_WP=1 wp eval-file tests/wordpress-portal.php` and
 `tests/wordpress-portal-http.php` and `tests/wordpress-admin.php`, then the standings,
-scheduling, calendar, registration, REST identity, referee and public API suites, followed by
+scheduling, calendar, registration, REST identity, referee and public API suites, plus
+automatic results, bracket synchronization, native REST guards, public result display,
+admin workflow and per-sport setup regressions, followed by
 `wp eval-file tests/wordpress-update.php` on an isolated
 `http://leagueflow.test` installation with MySQL, PHP 8.2, WP-CLI, `zip`, `mysqli`,
 `curl`, `gd` and the built plugin activated. The portal HTTP program starts PHP's

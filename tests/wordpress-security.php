@@ -180,7 +180,7 @@ $tests['SEC-04 scheduling'] = static function() use ( $fields, $admin, $admin_id
 	};
 	wp_set_current_user( $contributor ); add_filter( 'user_has_cap', $revoke_title, 10, 3 );
 	try {
-		lf_assert( 1 === $fields->schedule_matches( array_merge( $args, array( 'match_ids' => array( $late ) ) ) )['scheduled'] && 5 === $calls && get_post_meta( $late, 'lf_match_datetime', true ) && $title === get_the_title( $late ), 'Title revocation did not reach/preserve the late title boundary.' );
+		lf_assert( 0 === $fields->schedule_matches( array_merge( $args, array( 'match_ids' => array( $late ) ) ) )['scheduled'] && 5 === $calls && '' === get_post_meta( $late, 'lf_match_datetime', true ) && $title === get_the_title( $late ), 'Late title permission revocation must roll back the entire schedule.' );
 	} finally { remove_filter( 'user_has_cap', $revoke_title, 10 ); }
 	$admin->handle_match_bulk_actions( admin_url( 'edit.php?post_type=lf_match' ), 'leagueflow_auto_schedule', array( $bulk ) );
 	lf_assert( get_post_meta( $bulk, 'lf_match_datetime', true ) && 'Security Bulk Venue' === get_post_meta( $bulk, 'lf_venue', true ), 'Authorized bulk scheduling failed.' );

@@ -247,7 +247,7 @@ class Standings_Service {
 	 * @return void
 	 */
 	protected function apply_forfeit( &$rows, $home_id, $away_id, $outcome, $rules ) {
-		$walkover = max( 0, (int) get_setting( 'forfeit_score_winner', 3 ) );
+		$walkover = max( 0, (int) ( $rules['forfeit_score_winner'] ?? get_setting( 'forfeit_score_winner', 3 ) ) );
 
 		$rows[ $home_id ]['played']++;
 		$rows[ $away_id ]['played']++;

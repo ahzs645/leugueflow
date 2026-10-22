@@ -212,11 +212,7 @@ class Public_Matches_API {
 
 	/** Missing/invalid scores are null, never fabricated 0–0 results. */
 	protected function score( $value ) {
-		$value = (string) $value;
-		if ( ! preg_match( '/^[0-9]+$/D', $value ) ) { return null; }
-		$value = ltrim( $value, '0' ) ?: '0';
-		$max = (string) PHP_INT_MAX;
-		return strlen( $value ) < strlen( $max ) || ( strlen( $value ) === strlen( $max ) && strcmp( $value, $max ) <= 0 ) ? (int) $value : null;
+		return Match_Status::is_valid_score( $value ) ? (int) $value : null;
 	}
 
 	protected function record( $post ) {
@@ -229,19 +225,24 @@ class Public_Matches_API {
 		$away = (int) get_post_meta( $id, 'lf_away_team_id', true );
 		$result = null;
 		if ( 'finished' === $status ) {
-			$home_score = $this->score( get_post_meta( $id, 'lf_home_score', true ) );
-			$away_score = $this->score( get_post_meta( $id, 'lf_away_score', true ) );
-			$outcome = (string) get_post_meta( $id, 'lf_outcome', true );
-			$outcome = in_array( $outcome, array( 'forfeit_home', 'forfeit_away', 'double_forfeit' ), true ) ? $outcome : 'normal';
+			$stored_outcome = (string) get_post_meta( $id, 'lf_outcome', true );
+			$forfeit = in_array( $stored_outcome, array( 'forfeit_home', 'forfeit_away', 'double_forfeit' ), true );
+			$outcome = '' === $stored_outcome ? 'normal' : ( $forfeit ? $stored_outcome : 'unknown' );
+			$played_result = 'normal' === $outcome && $home && $away && $home !== $away;
+			$home_score = $played_result ? $this->score( get_post_meta( $id, 'lf_home_score', true ) ) : null;
+			$away_score = $played_result ? $this->score( get_post_meta( $id, 'lf_away_score', true ) ) : null;
+			$valid_participants = $home !== $away && ( $home || $away );
 			$override = (int) get_post_meta( $id, 'lf_winner_team_id', true );
-			$override = $override && in_array( $override, array( $home, $away ), true ) ? $override : null;
-			$complete = ( null !== $home_score && null !== $away_score ) || 'normal' !== $outcome || null !== $override;
+			// Explicit forfeits decide the result before any older winner override.
+			$override = $valid_participants && 'normal' === $outcome && $override && in_array( $override, array( $home, $away ), true ) ? $override : null;
+			$complete = $valid_participants && ( ( $home && $away && null !== $home_score && null !== $away_score ) || $forfeit || null !== $override );
 			$winner = $override;
-			if ( ! $winner && 'forfeit_home' === $outcome ) { $winner = $away ?: null; }
-			if ( ! $winner && 'forfeit_away' === $outcome ) { $winner = $home ?: null; }
-			if ( ! $winner && 'normal' === $outcome && null !== $home_score && null !== $away_score && $home_score !== $away_score ) { $winner = ( $home_score > $away_score ? $home : $away ) ?: null; }
+			if ( $complete && 'forfeit_home' === $outcome ) { $winner = $away ?: null; }
+			if ( $complete && 'forfeit_away' === $outcome ) { $winner = $home ?: null; }
+			if ( $complete && ! $winner && 'normal' === $outcome && null !== $home_score && null !== $away_score && $home_score !== $away_score ) { $winner = ( $home_score > $away_score ? $home : $away ) ?: null; }
 			$result = array( 'homeScore' => $home_score, 'awayScore' => $away_score, 'outcome' => $outcome, 'winnerTeamId' => $winner,
-				'winnerOverride' => $override, 'isDraw' => ! $winner && 'normal' === $outcome && null !== $home_score && $home_score === $away_score, 'complete' => $complete );
+				'outcomeLabel' => 'unknown' === $outcome ? __( 'Result unavailable', 'leagueflow' ) : Match_Status::outcome_label( $stored_outcome ),
+				'winnerOverride' => $override, 'isDraw' => $complete && ! $winner && 'normal' === $outcome && null !== $home_score && $home_score === $away_score, 'complete' => $complete );
 		}
 		return array(
 			'id' => 'match-' . $id, 'matchId' => $id, 'type' => 'match', 'title' => $post->post_title,
