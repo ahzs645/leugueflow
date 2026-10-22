@@ -155,11 +155,48 @@
 		update();
 	}
 
+	// Calendar Event poster: pick or clear an image with the media library.
+	function posterField( field ) {
+		var id = field.querySelector( '[data-leagueflow-poster-id]' );
+		var preview = field.querySelector( '[data-leagueflow-poster-preview]' );
+		var choose = field.querySelector( '[data-leagueflow-poster-choose]' );
+		var remove = field.querySelector( '[data-leagueflow-poster-remove]' );
+		var frame = null;
+		if ( ! id || ! choose || ! window.wp || ! window.wp.media ) {
+			if ( choose ) { choose.disabled = true; }
+			return;
+		}
+		function set( attachment ) {
+			var sizes = attachment && attachment.sizes ? attachment.sizes : {};
+			var image = sizes.medium || sizes.thumbnail || sizes.full || attachment;
+			id.value = attachment ? String( attachment.id ) : '0';
+			preview.hidden = ! attachment;
+			preview.src = attachment && image ? image.url : '';
+			remove.hidden = ! attachment;
+			choose.textContent = field.getAttribute( attachment ? 'data-change' : 'data-upload' );
+		}
+		choose.addEventListener( 'click', function () {
+			if ( ! frame ) {
+				frame = window.wp.media( { title: field.getAttribute( 'data-title' ), button: { text: field.getAttribute( 'data-button' ) }, library: { type: 'image' }, multiple: false } );
+				frame.on( 'select', function () {
+					set( frame.state().get( 'selection' ).first().toJSON() );
+					choose.focus();
+				} );
+			}
+			frame.open();
+		} );
+		remove.addEventListener( 'click', function () {
+			set( null );
+			choose.focus();
+		} );
+	}
+
 	function init() {
 		Array.prototype.forEach.call( document.querySelectorAll( 'select[data-leagueflow-searchable]' ), enhance );
 		Array.prototype.forEach.call( document.querySelectorAll( 'input[data-leagueflow-select-all]' ), selectAll );
 		Array.prototype.forEach.call( document.querySelectorAll( 'select[id^="leagueflow-filter-by-sport-"]' ), listSportFilter );
 		Array.prototype.forEach.call( document.querySelectorAll( '[data-leagueflow-result-preview]' ), resultPreview );
+		Array.prototype.forEach.call( document.querySelectorAll( '[data-leagueflow-poster]' ), posterField );
 	}
 
 	if ( 'loading' === document.readyState ) {

@@ -388,6 +388,15 @@
 					card.appendChild( el( 'p', 'leagueflow-calendar__event-result', event.resultLabel ) );
 				}
 			} else {
+				if ( event.poster && event.poster.src && ! options.compact ) {
+					var posterThumb = el( 'img', 'leagueflow-calendar__event-poster' );
+					posterThumb.src = event.poster.src;
+					posterThumb.alt = '';
+					posterThumb.loading = 'lazy';
+					posterThumb.decoding = 'async';
+					card.classList.add( 'has-poster' );
+					card.appendChild( posterThumb );
+				}
 				card.appendChild( el( 'p', 'leagueflow-calendar__event-title', event.title ) );
 
 				if ( event.registrationRequired ) {
@@ -895,6 +904,62 @@
 		}
 
 		var dialogReturnFocus = null;
+		var posterViewer = null;
+
+		// Poster: a card-sized image in the dialog; activating it shows the full
+		// image inside the same dialog, so focus handling and Escape stay simple.
+		function addPoster( event ) {
+			var poster = event.poster;
+			if ( ! poster || ! poster.src || ! poster.full ) {
+				return;
+			}
+			var card = dialog.querySelector( '[role="dialog"]' ) || dialog;
+			var open = el( 'button', 'leagueflow-calendar__poster' );
+			open.type = 'button';
+			open.setAttribute( 'aria-label', ( strings.viewPoster || 'View poster full size' ) + ': ' + ( poster.alt || event.title ) );
+			var thumb = el( 'img' );
+			thumb.src = poster.src;
+			thumb.alt = '';
+			if ( poster.width && poster.height ) { thumb.width = poster.width; thumb.height = poster.height; }
+			thumb.decoding = 'async';
+			open.appendChild( thumb );
+			open.appendChild( el( 'span', 'leagueflow-calendar__poster-hint', strings.viewPoster || 'View poster full size' ) );
+			dialogContent.appendChild( open );
+
+			var viewer = el( 'div', 'leagueflow-calendar__poster-viewer' );
+			viewer.hidden = true;
+			var bar = el( 'div', 'leagueflow-calendar__poster-bar' );
+			var back = el( 'button', 'leagueflow-calendar__dialog-action', strings.backToEvent || 'Back to event details' );
+			back.type = 'button';
+			var tab = el( 'a', 'leagueflow-calendar__dialog-action', strings.openPoster || 'Open poster in a new tab' );
+			tab.href = poster.full;
+			tab.target = '_blank';
+			tab.rel = 'noopener noreferrer';
+			bar.appendChild( back );
+			bar.appendChild( tab );
+			var full = el( 'img', 'leagueflow-calendar__poster-full' );
+			full.alt = poster.alt || event.title;
+			if ( poster.fullWidth && poster.fullHeight ) { full.width = poster.fullWidth; full.height = poster.fullHeight; }
+			viewer.appendChild( bar );
+			viewer.appendChild( full );
+			dialogContent.appendChild( viewer );
+
+			function show() {
+				if ( ! full.getAttribute( 'src' ) ) { full.src = poster.full; }
+				viewer.hidden = false;
+				card.classList.add( 'is-viewing-poster' );
+				posterViewer = hide;
+				back.focus();
+			}
+			function hide() {
+				viewer.hidden = true;
+				card.classList.remove( 'is-viewing-poster' );
+				posterViewer = null;
+				if ( open.isConnected ) { open.focus(); }
+			}
+			open.addEventListener( 'click', show );
+			back.addEventListener( 'click', hide );
+		}
 
 		function openDialog( event ) {
 			event = event._original || event;
@@ -905,6 +970,8 @@
 			dialogReturnFocus = document.activeElement;
 
 			dialogContent.textContent = '';
+			posterViewer = null;
+			( dialog.querySelector( '[role="dialog"]' ) || dialog ).classList.remove( 'is-viewing-poster' );
 
 			var title = el( 'h3', 'leagueflow-calendar__dialog-title', 'match' === event.source ? event.home + ' vs ' + event.away : event.title );
 			title.id = dialog.querySelector( '[role="dialog"]' ).getAttribute( 'aria-labelledby' ) || 'leagueflow-calendar-dialog-title';
@@ -924,6 +991,7 @@
 			}
 
 			dialogContent.appendChild( badges );
+			addPoster( event );
 
 			var details = el( 'dl', 'leagueflow-calendar__dialog-details' );
 
@@ -1015,6 +1083,7 @@
 
 			dialog.hidden = true;
 			document.documentElement.classList.remove( 'leagueflow-calendar-dialog-open' );
+			posterViewer = null;
 
 			if ( dialogReturnFocus && dialogReturnFocus.isConnected && dialogReturnFocus.focus ) {
 				dialogReturnFocus.focus();
@@ -1278,6 +1347,7 @@
 
 		function onKeydown( event ) {
 			if ( 'Escape' === event.key ) {
+				if ( posterViewer && dialog && ! dialog.hidden ) { posterViewer(); return; }
 				if ( ( ! dialog || dialog.hidden ) && panelClose && ! panelClose.hidden && root.contains( document.activeElement ) ) { panelClose.click(); }
 				closeDialog();
 				return;

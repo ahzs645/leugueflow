@@ -1125,3 +1125,22 @@
 		margin-left: 0;
 	}
 }
+
+/* Calendar Event poster field. */
+.leagueflow-poster-field__preview {
+	display: block;
+	max-width: 220px;
+	max-height: 300px;
+	height: auto;
+	margin-bottom: 8px;
+	border: 1px solid #dcdcde;
+	border-radius: 4px;
+}
+
+.leagueflow-poster-field__preview[hidden] {
+	display: none;
+}
+
+.leagueflow-poster-field [hidden] {
+	display: none !important;
+}

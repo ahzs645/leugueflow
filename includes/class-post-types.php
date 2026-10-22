@@ -251,6 +251,10 @@ class Post_Types {
 					'search_items'       => __( 'Search Calendar Events', 'leagueflow' ),
 					'not_found'          => __( 'No calendar events here yet. Calendar events are non-match items such as drop-ins, tournaments and deadlines.', 'leagueflow' ),
 					'not_found_in_trash' => __( 'No calendar events found in Trash.', 'leagueflow' ),
+					'featured_image'        => __( 'Poster image', 'leagueflow' ),
+					'set_featured_image'    => __( 'Set poster image', 'leagueflow' ),
+					'remove_featured_image' => __( 'Remove poster image', 'leagueflow' ),
+					'use_featured_image'    => __( 'Use as poster image', 'leagueflow' ),
 				),
 				'public'             => true,
 				'show_ui'            => true,
@@ -578,7 +582,9 @@ class Post_Types {
 	 * @return bool
 	 */
 	public function use_classic_editor_for_supported_types( $use_block_editor, $post_type ) {
-		if ( 'lf_team' === $post_type ) {
+		// Calendar events use the classic screen so the details box, with its
+		// dates, sport and poster, is the form staff fill in.
+		if ( in_array( $post_type, array( 'lf_team', 'lf_calendar_event' ), true ) ) {
 			return false;
 		}
 

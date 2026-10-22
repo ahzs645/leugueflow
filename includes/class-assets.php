@@ -161,6 +161,11 @@ class Assets {
 			wp_enqueue_style( 'leagueflow-admin' );
 			wp_enqueue_script( 'leagueflow-admin-ui' );
 		}
+
+		// The Calendar Event poster field uses the media library.
+		if ( 'lf_calendar_event' === $screen->id ) {
+			wp_enqueue_media();
+		}
 	}
 
 	/**

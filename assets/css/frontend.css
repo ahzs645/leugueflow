@@ -3519,3 +3519,99 @@ body:not(.home) .unbc-page-body > .wp-block-post-content > .leagueflow-portal.al
 .leagueflow-calendar.is-mobile-calendar.is-month-popover .leagueflow-calendar__panel { position: static; width: 100%; max-height: none; }
 .leagueflow-calendar.is-mobile-calendar .leagueflow-calendar__header { flex-wrap: wrap; }
 .leagueflow-calendar.is-mobile-calendar .leagueflow-calendar__nav { width: 100%; }
+
+/*
+ * Event posters: a card-sized poster in the event dialog that opens the full
+ * image in the same dialog, and a small thumbnail on list and panel cards.
+ */
+.leagueflow-calendar__poster {
+	display: block;
+	position: relative;
+	width: 100%;
+	margin: 0.75rem 0;
+	padding: 0;
+	border: 1px solid var(--lf-border);
+	border-radius: var(--lf-radius);
+	background: var(--lf-muted);
+	cursor: zoom-in;
+	overflow: hidden;
+}
+
+.leagueflow-calendar__poster img {
+	display: block;
+	width: 100%;
+	height: auto;
+	max-height: min(360px, 45vh);
+	object-fit: contain;
+}
+
+.leagueflow-calendar__poster-hint {
+	position: absolute;
+	right: 0.5rem;
+	bottom: 0.5rem;
+	padding: 0.2rem 0.6rem;
+	border-radius: 999px;
+	background: var(--lf-card);
+	color: var(--lf-card-foreground);
+	box-shadow: var(--lf-shadow-sm);
+	font-size: 0.8rem;
+}
+
+.leagueflow-calendar__poster:focus-visible {
+	outline: 2px solid var(--lf-ring, var(--lf-primary));
+	outline-offset: 2px;
+}
+
+.leagueflow-calendar__poster-viewer[hidden] {
+	display: none;
+}
+
+.leagueflow-calendar__dialog-card.is-viewing-poster [data-calendar-dialog-content] > :not(.leagueflow-calendar__poster-viewer) {
+	display: none;
+}
+
+.leagueflow-calendar__poster-bar {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+	margin: 0 2.5rem 0.75rem 0;
+}
+
+button.leagueflow-calendar__dialog-action {
+	font: inherit;
+	cursor: pointer;
+}
+
+.leagueflow-calendar__poster-full {
+	display: block;
+	width: 100%;
+	height: auto;
+	border-radius: var(--lf-radius);
+}
+
+.leagueflow-calendar__event.has-poster {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	column-gap: 0.75rem;
+}
+
+.leagueflow-calendar__event.has-poster > :not(.leagueflow-calendar__event-poster) {
+	grid-column: 1;
+}
+
+.leagueflow-calendar__event-poster {
+	grid-column: 2;
+	grid-row: 1 / span 4;
+	width: 56px;
+	height: 72px;
+	object-fit: cover;
+	border-radius: calc(var(--lf-radius) / 2);
+	border: 1px solid var(--lf-border);
+}
+
+@media (max-width: 760px) {
+	.leagueflow-calendar__poster-bar .leagueflow-calendar__dialog-action {
+		flex: 1 1 100%;
+		min-height: 44px;
+	}
+}

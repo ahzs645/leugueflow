@@ -10,7 +10,8 @@ publish it, save it without publishing, or schedule it. Only published (Finished
 results show on the site and count in the standings. `wp leagueflow results
 finish-scored` publishes scored matches that were never finished. The calendar and
 league views use CampusManager's layout with theme-supplied design tokens; on phones
-the month is a compact grid with the selected day's games below. See
+the month is a compact grid with the selected day's games below. Calendar Events use the
+classic editor and can carry a poster image that visitors open full size from the calendar. See
 [release notes](releases/1.2.0.md).
 
 ## Scoring and admin workflow fixes (1.1.1)

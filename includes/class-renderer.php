@@ -589,6 +589,10 @@ class Renderer {
 				'close'          => __( 'Close', 'leagueflow' ),
 				'cancelled'      => __( 'Cancelled', 'leagueflow' ),
 				'postponed'      => __( 'Postponed', 'leagueflow' ),
+				'viewPoster'     => __( 'View poster full size', 'leagueflow' ),
+				'backToEvent'    => __( 'Back to event details', 'leagueflow' ),
+				'openPoster'     => __( 'Open poster in a new tab', 'leagueflow' ),
+				'hasPoster'      => __( 'Poster', 'leagueflow' ),
 			),
 		);
 
@@ -860,10 +864,41 @@ class Renderer {
 				'cost'                 => $item['cost'],
 				'registrationRequired' => (bool) $item['registration_required'],
 				'registrationUrl'      => $item['registration_url'],
+				'poster'               => $item['poster'] ?? null,
 			);
 		}
 
 		return $events;
+	}
+
+	/**
+	 * Poster image for a calendar event: a card-sized image plus the full
+	 * size for the viewer. Null when the event has no image poster.
+	 *
+	 * @param int $event_id Event ID.
+	 * @return array<string, mixed>|null
+	 */
+	protected function get_event_poster( $event_id ) {
+		$id = (int) get_post_thumbnail_id( $event_id );
+		if ( ! $id || ! wp_attachment_is_image( $id ) ) {
+			return null;
+		}
+		$card = wp_get_attachment_image_src( $id, 'medium_large' );
+		$full = wp_get_attachment_image_src( $id, 'full' );
+		if ( ! $card || ! $full ) {
+			return null;
+		}
+		$alt = trim( (string) get_post_meta( $id, '_wp_attachment_image_alt', true ) );
+		return array(
+			'src'        => $card[0],
+			'width'      => (int) $card[1],
+			'height'     => (int) $card[2],
+			'full'       => $full[0],
+			'fullWidth'  => (int) $full[1],
+			'fullHeight' => (int) $full[2],
+			/* translators: %s: event title */
+			'alt'        => '' !== $alt ? $alt : sprintf( __( 'Poster for %s', 'leagueflow' ), get_the_title( $event_id ) ),
+		);
 	}
 
 	/** Accept canonical site-local datetimes with or without stored seconds. */
@@ -1623,6 +1658,7 @@ class Renderer {
 			'cost'                  => get_post_meta( $event->ID, 'lf_event_cost', true ),
 			'registration_required' => (bool) get_post_meta( $event->ID, 'lf_event_registration_required', true ),
 			'registration_url'      => get_post_meta( $event->ID, 'lf_event_registration_url', true ),
+			'poster'                => $this->get_event_poster( $event->ID ),
 			'sport_slug'            => $sport_slug,
 			'sport_label'           => $sport['label'],
 			'league_level_slug'     => get_post_league_level_slug( $event->ID ),

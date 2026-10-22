@@ -65,6 +65,54 @@ try {
 	lfcal_check( 0 === $day['total'], 'Midnight end does not occupy the following day.' );
 	$only_events = $renderer->get_calendar_page( $scope + array( 'event_type' => 'drop_in' ) );
 	lfcal_check( array( $span ) === array_column( $only_events['items'], 'postId' ), 'Event-type shortcode filtering agrees with REST filtering.' );
+	// Posters: the classic editor, the details-box poster field and the calendar data.
+	lfcal_check( false === use_block_editor_for_post_type( 'lf_calendar_event' ), 'Calendar events use the classic editor.' );
+	lfcal_check( null === $only_events['items'][0]['poster'], 'An event without a poster sends none to the calendar.' );
+	$uploads = wp_upload_dir();
+	$file = trailingslashit( $uploads['path'] ) . 'lfcal-poster-' . wp_generate_password( 6, false, false ) . '.png';
+	file_put_contents( $file, base64_decode( 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=' ) );
+	$attachment = wp_insert_attachment( array( 'post_mime_type' => 'image/png', 'post_title' => 'Poster', 'post_status' => 'inherit' ), $file );
+	$GLOBALS['lfcal_posts'][] = $attachment;
+	require_once ABSPATH . 'wp-admin/includes/image.php';
+	wp_update_attachment_metadata( $attachment, wp_generate_attachment_metadata( $attachment, $file ) );
+	update_post_meta( $attachment, '_wp_attachment_image_alt', 'Drop-in poster' );
+	$admin = null;
+	$modules = new ReflectionProperty( \LeagueFlow\Plugin::class, 'modules' );
+	$modules->setAccessible( true );
+	foreach ( $modules->getValue( \LeagueFlow\Plugin::instance() ) as $module ) { if ( $module instanceof \LeagueFlow\Admin ) { $admin = $module; } }
+	$prior_post = $_POST;
+	wp_set_current_user( (int) get_user_by( 'login', 'admin' )->ID );
+	// The details box requires an enabled sport.
+	$poster_sport = ( new \LeagueFlow\Sports_Manager() )->get_enabled_sport_slugs()[0];
+	wp_set_object_terms( $span, array( $poster_sport ), 'lf_sport' );
+	$poster_post = static function ( $value ) use ( $admin, $span ) {
+		$_POST = wp_slash( array(
+			'leagueflow_calendar_event_nonce' => wp_create_nonce( 'leagueflow_save_calendar_event' ),
+			'lf_event_start_datetime' => str_replace( ' ', 'T', substr( (string) get_post_meta( $span, 'lf_event_start_datetime', true ), 0, 16 ) ),
+			'lf_event_end_datetime' => str_replace( ' ', 'T', substr( (string) get_post_meta( $span, 'lf_event_end_datetime', true ), 0, 16 ) ),
+			'lf_event_type' => 'drop_in', 'lf_event_status' => 'scheduled', 'lf_event_cost' => '$5',
+			'lf_sport_choice' => \LeagueFlow\get_post_primary_term_slug( $span, 'lf_sport' ),
+			'lf_league_level_id' => (string) \LeagueFlow\get_post_primary_term_id( $span, 'lf_league_level' ),
+			'lf_event_poster_id' => (string) $value,
+		) );
+		try { $admin->save_calendar_event_meta( $span, get_post( $span ) ); } finally { $_POST = array(); }
+	};
+	$poster_post( $attachment );
+	lfcal_check( $attachment === (int) get_post_thumbnail_id( $span ), 'The details box saves the poster as the featured image.' );
+	$with_poster = $renderer->get_calendar_page( $scope + array( 'event_type' => 'drop_in' ) );
+	$poster = $with_poster['items'][0]['poster'];
+	lfcal_check( is_array( $poster ) && wp_get_attachment_url( $attachment ) === $poster['full'] && '' !== $poster['src'] && 'Drop-in poster' === $poster['alt'], 'The calendar receives the poster sizes and its alt text.' );
+	wp_set_current_user( 0 );
+	$rest_events = array_column( lfcal_request( array( 'competition' => $competition, 'public_only' => true, 'start_date' => '2026-11-30', 'end_date' => '2026-12-01', 'per_page' => 50 ) )->get_data()['events'], null, 'postId' );
+	lfcal_check( wp_get_attachment_url( $attachment ) === ( $rest_events[ $span ]['poster']['full'] ?? '' ), 'Calendar REST pages carry the poster too.' );
+	wp_set_current_user( (int) get_user_by( 'login', 'admin' )->ID );
+	$poster_post( 0 );
+	lfcal_check( 0 === (int) get_post_thumbnail_id( $span ), 'Removing the poster clears the featured image.' );
+	$poster_post( $span );
+	lfcal_check( 0 === (int) get_post_thumbnail_id( $span ), 'A non-image ID is not accepted as a poster.' );
+	$_POST = $prior_post;
+	wp_set_current_user( 0 );
+	@unlink( $file );
 	$reverse = $renderer->get_calendar_page( $scope + array( 'start_date' => '2026-12-01', 'end_date' => '2026-12-31', 'order' => 'desc' ) );
 	lfcal_check( array( $december, $span ) === array_column( $reverse['items'], 'postId' ), 'Descending order applies before pagination.' );
 	$out = $renderer->get_calendar_page( $scope + array( 'page' => 20 ) );

@@ -642,6 +642,9 @@ class Admin {
 		foreach ( array( 'lf_team', 'lf_player', 'lf_match', 'lf_calendar_event' ) as $post_type ) {
 			remove_meta_box( 'tagsdiv-lf_sport', $post_type, 'side' );
 		}
+
+		// The poster is chosen in the Calendar Event details box.
+		remove_meta_box( 'postimagediv', 'lf_calendar_event', 'side' );
 	}
 
 	/**
@@ -3087,6 +3090,28 @@ class Admin {
 				<td><?php $this->render_select( 'lf_league_level_id', $this->get_league_level_options(), $league_level_id ? $league_level_id : $this->find_default_league_level_id(), null ); ?></td>
 			</tr>
 			<tr>
+				<?php
+				$poster_id  = (int) get_post_thumbnail_id( $post );
+				$poster_src = $poster_id ? wp_get_attachment_image_url( $poster_id, 'medium' ) : '';
+				?>
+				<th scope="row"><span id="lf_event_poster_label"><?php esc_html_e( 'Poster', 'leagueflow' ); ?></span></th>
+				<td>
+					<div class="leagueflow-poster-field" data-leagueflow-poster role="group" aria-labelledby="lf_event_poster_label"
+						data-title="<?php esc_attr_e( 'Choose a poster image', 'leagueflow' ); ?>"
+						data-button="<?php esc_attr_e( 'Use this poster', 'leagueflow' ); ?>"
+						data-change="<?php esc_attr_e( 'Change poster', 'leagueflow' ); ?>"
+						data-upload="<?php esc_attr_e( 'Add poster', 'leagueflow' ); ?>">
+						<input type="hidden" name="lf_event_poster_id" value="<?php echo esc_attr( (string) $poster_id ); ?>" data-leagueflow-poster-id />
+						<img class="leagueflow-poster-field__preview" src="<?php echo esc_url( (string) $poster_src ); ?>" alt="" data-leagueflow-poster-preview<?php echo $poster_src ? '' : ' hidden'; ?> />
+						<p>
+							<button type="button" class="button" data-leagueflow-poster-choose><?php echo esc_html( $poster_id ? __( 'Change poster', 'leagueflow' ) : __( 'Add poster', 'leagueflow' ) ); ?></button>
+							<button type="button" class="button-link button-link-delete" data-leagueflow-poster-remove<?php echo $poster_id ? '' : ' hidden'; ?>><?php esc_html_e( 'Remove poster', 'leagueflow' ); ?></button>
+						</p>
+						<p class="description"><?php esc_html_e( 'Optional. Shown with the event on the calendar; visitors can open it full size.', 'leagueflow' ); ?></p>
+					</div>
+				</td>
+			</tr>
+			<tr>
 				<th scope="row"><label for="lf_event_cost"><?php esc_html_e( 'Cost', 'leagueflow' ); ?></label></th>
 				<td><input type="text" id="lf_event_cost" name="lf_event_cost" class="regular-text" value="<?php echo esc_attr( (string) get_post_meta( $post->ID, 'lf_event_cost', true ) ); ?>" placeholder="<?php esc_attr_e( 'Free, $5, included with membership', 'leagueflow' ); ?>" /></td>
 			</tr>
@@ -3694,6 +3719,14 @@ class Admin {
 		$this->update_or_delete_meta( $post_id, 'lf_event_cost', sanitize_text_field( wp_unslash( $_POST['lf_event_cost'] ?? '' ) ) );
 		$this->update_or_delete_meta( $post_id, 'lf_event_registration_url', esc_url_raw( wp_unslash( $_POST['lf_event_registration_url'] ?? '' ) ) );
 		update_post_meta( $post_id, 'lf_event_registration_required', ! empty( $_POST['lf_event_registration_required'] ) ? 1 : 0 );
+		if ( isset( $_POST['lf_event_poster_id'] ) && is_scalar( $_POST['lf_event_poster_id'] ) ) {
+			$poster_id = absint( $_POST['lf_event_poster_id'] );
+			if ( ! $poster_id ) {
+				delete_post_thumbnail( $post_id );
+			} elseif ( wp_attachment_is_image( $poster_id ) && current_user_can( 'read_post', $poster_id ) ) {
+				set_post_thumbnail( $post_id, $poster_id );
+			}
+		}
 
 		$this->assign_league_level_from_request( $post_id );
 		Taxonomies::clear_editor_event_context( $post_id );
