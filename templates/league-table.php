@@ -60,8 +60,5 @@ $show_draws = (bool) array_filter( $rows, static function( $row ) { return ! emp
 				<?php endforeach; ?>
 			</tbody>
 		</table>
-		<?php if ( ! array_sum( array_column( $rows, 'played' ) ) ) : ?>
-			<p><?php esc_html_e( 'Teams are listed; results will appear after league matches are marked Finished and published.', 'leagueflow' ); ?></p>
-		<?php endif; ?>
 	<?php endif; ?>
 </div>

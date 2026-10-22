@@ -956,3 +956,172 @@
 .leagueflow-settings-panel .form-table tr.leagueflow-setting-row--points > th {
 	flex: 1 1 auto;
 }
+
+/*
+ * Results screen: progress tabs as count cards, then one card per game with
+ * its score, result type and publish / hold / schedule actions.
+ */
+.leagueflow-results-filter {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 12px 0;
+}
+
+.leagueflow-results-summary {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+	gap: 8px;
+	margin: 0 0 16px;
+	padding: 0;
+	list-style: none;
+}
+
+.leagueflow-results-summary__item a {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-height: 44px;
+	padding: 10px 12px;
+	border: 1px solid #dcdcde;
+	border-radius: 6px;
+	background: #fff;
+	color: #1d2327;
+	text-decoration: none;
+}
+
+.leagueflow-results-summary__item strong {
+	font-size: 22px;
+	line-height: 1.2;
+}
+
+.leagueflow-results-summary__item.is-current a {
+	border-color: #2271b1;
+	box-shadow: inset 0 0 0 1px #2271b1;
+}
+
+.leagueflow-results-summary__item.is-needs_score strong,
+.leagueflow-results-summary__item.is-conflict strong {
+	color: #b32d2e;
+}
+
+.leagueflow-results-summary__item.is-held strong {
+	color: #996800;
+}
+
+.leagueflow-results-bulk {
+	margin: 0 0 12px;
+}
+
+.leagueflow-results-list {
+	display: grid;
+	gap: 10px;
+	max-width: 960px;
+}
+
+.leagueflow-result-card {
+	padding: 12px 16px;
+	border: 1px solid #dcdcde;
+	border-left: 4px solid #c3c4c7;
+	border-radius: 6px;
+	background: #fff;
+}
+
+.leagueflow-result-card.is-needs_score,
+.leagueflow-result-card.is-conflict {
+	border-left-color: #d63638;
+}
+
+.leagueflow-result-card.is-held {
+	border-left-color: #dba617;
+}
+
+.leagueflow-result-card.is-scheduled {
+	border-left-color: #2271b1;
+}
+
+.leagueflow-result-card.is-published {
+	border-left-color: #00a32a;
+}
+
+.leagueflow-result-card__head h2 {
+	margin: 0;
+	font-size: 15px;
+}
+
+.leagueflow-result-card__meta,
+.leagueflow-result-card__history,
+.leagueflow-result-card__status {
+	margin: 2px 0 0;
+	color: #50575e;
+}
+
+.leagueflow-result-card__flag {
+	margin-left: 6px;
+	padding: 1px 6px;
+	border-radius: 10px;
+	background: #fcf0f1;
+	color: #8a2424;
+	font-size: 12px;
+}
+
+.leagueflow-result-card__score {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-end;
+	gap: 8px 12px;
+	margin: 10px 0;
+}
+
+.leagueflow-result-card__score label {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	font-size: 12px;
+}
+
+.leagueflow-result-card__score input[type="number"] {
+	width: 72px;
+	min-height: 36px;
+	font-size: 16px;
+	text-align: center;
+}
+
+.leagueflow-result-card__score > span {
+	padding-bottom: 8px;
+	font-size: 16px;
+}
+
+.leagueflow-result-card__actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+}
+
+.leagueflow-result-card__schedule {
+	display: inline-flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px;
+}
+
+.leagueflow-result-card__edit {
+	margin-left: auto;
+}
+
+@media (max-width: 782px) {
+	.leagueflow-result-card__actions .button,
+	.leagueflow-result-card__schedule input {
+		min-height: 44px;
+	}
+
+	.leagueflow-result-card__actions > .button,
+	.leagueflow-result-card__schedule {
+		flex: 1 1 100%;
+	}
+
+	.leagueflow-result-card__edit {
+		margin-left: 0;
+	}
+}

@@ -137,6 +137,7 @@ jobs:
           wp eval-file "$GITHUB_WORKSPACE/tests/wordpress-admin-workflow.php" --path="$wp_root"
           wp eval-file "$GITHUB_WORKSPACE/tests/wordpress-sports-setup.php" --path="$wp_root"
           wp eval-file "$GITHUB_WORKSPACE/tests/wordpress-results.php" --path="$wp_root"
+          wp eval-file "$GITHUB_WORKSPACE/tests/wordpress-results-workflow.php" --path="$wp_root"
           wp eval-file "$GITHUB_WORKSPACE/tests/wordpress-bracket-sync.php" --path="$wp_root"
           wp eval-file "$GITHUB_WORKSPACE/tests/wordpress-result-rest.php" --path="$wp_root"
           wp eval-file "$GITHUB_WORKSPACE/tests/wordpress-result-display.php" --path="$wp_root"

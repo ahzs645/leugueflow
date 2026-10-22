@@ -1659,6 +1659,12 @@ class Renderer {
 
 		// Walkovers contribute configured standings points, but those awards
 		// are not played scores. Invalid imported scores must stay unavailable.
+		// Saved scores stay private until the result is published (Finished).
+		if ( ! Result_Service::result_is_public( $match->ID, $status ) ) {
+			$home_score = '';
+			$away_score = '';
+			$outcome    = '';
+		}
 		$played_result = '' === $outcome && $home_team_id && $away_team_id && $home_team_id !== $away_team_id;
 		$home_score = $played_result && Match_Status::is_valid_score( $home_score ) ? (string) (int) $home_score : '';
 		$away_score = $played_result && Match_Status::is_valid_score( $away_score ) ? (string) (int) $away_score : '';

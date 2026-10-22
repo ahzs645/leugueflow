@@ -309,10 +309,12 @@ class Knockout_Service {
 		$is_bye = $winner_id && $winner_id === (int) get_post_meta( $match->ID, 'lf_winner_team_id', true )
 			&& ( (bool) $home_team_id !== (bool) $away_team_id ) && '' === $outcome && '' === $home_score && '' === $away_score;
 		$played_result = '' === $outcome && $home_team_id && $away_team_id && $home_team_id !== $away_team_id;
-		$home_score = $played_result && Match_Status::is_valid_score( $home_score ) ? (string) (int) $home_score : '';
-		$away_score = $played_result && Match_Status::is_valid_score( $away_score ) ? (string) (int) $away_score : '';
+		// Saved scores stay private until the result is published (Finished).
+		$public_result = Result_Service::result_is_public( $match->ID, $status );
+		$home_score = $public_result && $played_result && Match_Status::is_valid_score( $home_score ) ? (string) (int) $home_score : '';
+		$away_score = $public_result && $played_result && Match_Status::is_valid_score( $away_score ) ? (string) (int) $away_score : '';
 		$status_labels = Match_Status::statuses();
-		$outcome_label = Match_Status::outcome_label( $outcome );
+		$outcome_label = $public_result ? Match_Status::outcome_label( $outcome ) : '';
 		$result_label = $outcome_label;
 		if ( 'finished' === $status && ( '' === $home_score || '' === $away_score ) && ! $winner_id && '' === $result_label ) {
 			$result_label = __( 'Score unavailable', 'leagueflow' );

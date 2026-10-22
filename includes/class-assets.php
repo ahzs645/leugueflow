@@ -131,6 +131,7 @@ class Assets {
 			'leagueflow_page_leagueflow-fixtures',
 			'leagueflow_page_leagueflow-placements',
 			'leagueflow_page_leagueflow-requests',
+			'leagueflow_page_leagueflow-results',
 			'leagueflow_page_leagueflow-setup',
 			'leagueflow_page_leagueflow-utilities',
 			'leagueflow_page_leagueflow-standings',

@@ -116,6 +116,13 @@ class Admin {
 	protected $requests_admin;
 
 	/**
+	 * Results screen.
+	 *
+	 * @var Admin_Results
+	 */
+	protected $results_admin;
+
+	/**
 	 * Setup check screen.
 	 *
 	 * @var Admin_Setup
@@ -141,8 +148,9 @@ class Admin {
 	 * @param Field_Availability_Manager $field_availability_manager Field availability manager.
 	 * @param Fixture_Generator          $fixture_generator Fixture generator.
 	 * @param Join_Request_Service|null  $join_requests Join request rules.
+	 * @param Result_Service|null        $results Result writer.
 	 */
-	public function __construct( Standings_Service $standings_service, Knockout_Service $knockout_service, Renderer $renderer, Seeder $seeder, Sports_Manager $sports_manager, Exporter $exporter, Field_Availability_Manager $field_availability_manager, Fixture_Generator $fixture_generator, $join_requests = null ) {
+	public function __construct( Standings_Service $standings_service, Knockout_Service $knockout_service, Renderer $renderer, Seeder $seeder, Sports_Manager $sports_manager, Exporter $exporter, Field_Availability_Manager $field_availability_manager, Fixture_Generator $fixture_generator, $join_requests = null, $results = null ) {
 		$this->standings_service          = $standings_service;
 		$this->knockout_service           = $knockout_service;
 		$this->renderer                   = $renderer;
@@ -153,6 +161,7 @@ class Admin {
 		$this->fixture_generator          = $fixture_generator;
 		$this->requests_admin             = new Admin_Requests( $join_requests instanceof Join_Request_Service ? $join_requests : Join_Request_Service::shared(), $sports_manager );
 		$this->setup_admin                = new Admin_Setup( $sports_manager, $field_availability_manager );
+		$this->results_admin              = new Admin_Results( $results instanceof Result_Service ? $results : new Result_Service(), $sports_manager );
 	}
 
 	/**
@@ -180,6 +189,7 @@ class Admin {
 	 */
 	public function register() {
 		$this->requests_admin->register();
+		$this->results_admin->register();
 		$this->setup_admin->register();
 		add_action( 'admin_menu', array( $this, 'register_menus' ) );
 		add_action( 'all_admin_notices', array( $this, 'render_context_bar' ), 1 );
@@ -293,6 +303,18 @@ class Admin {
 			);
 		}
 
+		$waiting       = $this->results_admin->count_waiting();
+		$results_label = __( 'Results', 'leagueflow' );
+		if ( $waiting ) {
+			$results_label .= sprintf(
+				' <span class="awaiting-mod count-%1$d"><span class="pending-count" aria-hidden="true">%2$s</span><span class="screen-reader-text">%3$s</span></span>',
+				$waiting,
+				esc_html( number_format_i18n( $waiting ) ),
+				/* translators: %s: number of played games waiting for a published result */
+				esc_html( sprintf( _n( '%s result to publish', '%s results to publish', $waiting, 'leagueflow' ), number_format_i18n( $waiting ) ) )
+			);
+		}
+
 		$items = array(
 			array( __( 'Overview', 'leagueflow' ), __( 'Overview', 'leagueflow' ), 'edit_posts', 'leagueflow', array( $this, 'render_dashboard_page' ) ),
 			array( __( 'Setup check', 'leagueflow' ), __( 'Setup check', 'leagueflow' ), Admin_Setup::CAPABILITY, Admin_Setup::PAGE, array( $this, 'render_setup_page' ) ),
@@ -300,6 +322,7 @@ class Admin {
 			array( __( 'Players', 'leagueflow' ), __( 'Players', 'leagueflow' ), 'edit_posts', 'edit.php?post_type=lf_player', null ),
 			array( __( 'Requests', 'leagueflow' ), $requests_label, 'leagueflow_manage_placements', 'leagueflow-requests', array( $this->requests_admin, 'render_page' ) ),
 			array( __( 'Matches', 'leagueflow' ), __( 'Matches', 'leagueflow' ), 'edit_posts', 'edit.php?post_type=lf_match', null ),
+			array( __( 'Results', 'leagueflow' ), $results_label, 'edit_posts', Admin_Results::PAGE, array( $this->results_admin, 'render_page' ) ),
 			array( __( 'Generate fixtures', 'leagueflow' ), __( 'Generate fixtures', 'leagueflow' ), 'leagueflow_manage_fixtures', 'leagueflow-fixtures', array( $this, 'render_fixtures_page' ) ),
 			array( __( 'Venues & availability', 'leagueflow' ), __( 'Venues & availability', 'leagueflow' ), 'leagueflow_manage_field_availability', 'leagueflow-fields', array( $this, 'render_field_availability_page' ) ),
 			array( __( 'Calendar Events', 'leagueflow' ), __( 'Calendar Events', 'leagueflow' ), 'edit_posts', 'edit.php?post_type=lf_calendar_event', null ),
@@ -4837,31 +4860,10 @@ class Admin {
 						++$skipped;
 						continue;
 					}
-					$home_id = (int) get_post_meta( $post_id, 'lf_home_team_id', true );
-					$away_id = (int) get_post_meta( $post_id, 'lf_away_team_id', true );
-					$home_sport = get_post_primary_term_id( $home_id, 'lf_sport' );
-					$away_sport = get_post_primary_term_id( $away_id, 'lf_sport' );
-					$home_level = get_post_primary_term_id( $home_id, 'lf_league_level' );
-					$away_level = get_post_primary_term_id( $away_id, 'lf_league_level' );
-					if ( ! $home_id || ! $away_id || $home_id === $away_id || 'lf_team' !== get_post_type( $home_id ) || 'lf_team' !== get_post_type( $away_id )
-						|| ! in_array( get_post_status( $home_id ), array( 'publish', 'private', 'draft', 'pending', 'future' ), true )
-						|| ! in_array( get_post_status( $away_id ), array( 'publish', 'private', 'draft', 'pending', 'future' ), true )
-						|| ! can_view_league_post( $home_id ) || ! can_view_league_post( $away_id ) || ! $home_sport || $home_sport !== $away_sport
-						|| get_post_primary_term_id( $post_id, 'lf_sport' ) !== $home_sport || ( $home_level && $away_level && $home_level !== $away_level ) ) {
+					if ( ! Result_Service::can_finish_context( $post_id ) ) {
 						++$skipped;
 						continue;
 					}
-					$sport_term = get_term( $home_sport, 'lf_sport' );
-					$compatible_context = $sport_term instanceof \WP_Term;
-					foreach ( array( 'lf_competition', 'lf_season' ) as $taxonomy ) {
-						$terms = wp_get_object_terms( $post_id, $taxonomy, array( 'fields' => 'ids' ) );
-						if ( is_wp_error( $terms ) ) { $compatible_context = false; continue; }
-						foreach ( $terms as $term_id ) {
-							$owner = (string) get_term_meta( $term_id, 'lf_sport_slug', true );
-							if ( '' !== $owner && ( ! $sport_term instanceof \WP_Term || $owner !== $sport_term->slug ) ) { $compatible_context = false; }
-						}
-					}
-					if ( ! $compatible_context ) { ++$skipped; continue; }
 				}
 				Match_Status::defer_transitions( $post_id );
 				update_post_meta( $post_id, 'lf_status', $status );

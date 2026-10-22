@@ -41,6 +41,7 @@ $leagueflow_files = array(
 	'includes/class-availability.php',
 	'includes/class-fixture-generator.php',
 	'includes/class-match-status.php',
+	'includes/class-result-service.php',
 	'includes/class-plugin.php',
 	'includes/class-activator.php',
 	'includes/class-registration-consent.php',
@@ -55,6 +56,7 @@ $leagueflow_files = array(
 	'includes/class-seeder.php',
 	'includes/class-join-request-service.php',
 	'includes/class-admin-requests.php',
+	'includes/class-admin-results.php',
 	'includes/class-admin-setup.php',
 	'includes/class-admin.php',
 	'includes/class-admin-guide.php',
@@ -64,6 +66,7 @@ $leagueflow_files = array(
 	'includes/class-shortcodes.php',
 	'includes/class-blocks.php',
 	'includes/class-template-loader.php',
+	'includes/class-cli.php',
 );
 
 foreach ( $leagueflow_files as $leagueflow_file ) {
