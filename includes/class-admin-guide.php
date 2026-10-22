@@ -54,13 +54,13 @@ class Admin_Guide {
 				),
 			),
 			array(
-				'title' => __( '4. Give referees limited access', 'leagueflow' ),
+				'title' => __( '4. Give referees access', 'leagueflow' ),
 				'url' => admin_url( 'admin.php?page=leagueflow-referee' ),
-				'link' => __( 'Open Referee desk', 'leagueflow' ),
+				'link' => __( 'Open Referees', 'leagueflow' ),
 				'steps' => array(
-					__( 'An administrator creates the official’s WordPress account with the LeagueFlow Referee role. In each match, select that person under Assigned referees.', 'leagueflow' ),
-					__( 'Leave score entry unchecked for roster access only. Enable it per match when that referee should submit the final score. The referee sees only the playing details and acknowledgement status for the two assigned teams.', 'leagueflow' ),
-					__( 'Referees sign in and open Referee desk. You may also place [leagueflow_referee] on a page. Submitted final results are recorded with the submitting user and time. Eligible linked knockout matches advance automatically; staff handle corrections and any bracket review notice.', 'leagueflow' ),
+					__( 'In LeagueFlow → Referees, add the official by email or username. Their player role is kept, so a player can also be a referee.', 'leagueflow' ),
+					__( 'Referees sign in on the website and choose Referee desk from their account menu. They can search every published game, open both rosters, and publish a score or save it for you to review.', 'leagueflow' ),
+					__( 'Assigning a referee to a game is optional and puts it at the top of their list. If a referee plays in a game they are flagged on the match, the Results screen and the Referees page, and they can only save that score for staff to publish.', 'leagueflow' ),
 				),
 			),
 			array(

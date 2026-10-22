@@ -308,11 +308,12 @@ function can_link_player_account( $user_id ) {
 
 /** True when an account holds only participant roles and capabilities. */
 function is_participant_account( $user ) {
-	$roles = array( 'subscriber', 'leagueflow_player', 'leagueflow_team_manager' );
+	// A referee is still a participant: the role only reads rosters and enters results.
+	$roles = array( 'subscriber', 'leagueflow_player', 'leagueflow_team_manager', 'leagueflow_referee' );
 	if ( ! $user instanceof \WP_User || empty( $user->roles ) || array_diff( $user->roles, $roles ) || is_super_admin( $user->ID ) ) {
 		return false;
 	}
-	$allowed = array_merge( $roles, array( 'read', 'level_0', 'leagueflow_manage_profile', 'leagueflow_manage_team' ) );
+	$allowed = array_merge( $roles, array( 'read', 'level_0', 'leagueflow_manage_profile', 'leagueflow_manage_team', 'leagueflow_view_assigned_rosters', 'leagueflow_submit_assigned_scores' ) );
 	foreach ( $user->allcaps as $capability => $granted ) {
 		if ( $granted && ! in_array( $capability, $allowed, true ) ) {
 			return false;
@@ -1985,7 +1986,7 @@ function sport_accent_color( $sport_slug ) {
  * @return string
  */
 function render_match_card( $match, $args = array() ) {
-	$args      = array_merge( array( 'link' => true, 'show_date' => true, 'after' => '' ), $args );
+	$args      = array_merge( array( 'link' => true, 'show_date' => true, 'after' => '', 'badges' => array() ), $args );
 	$permalink = (string) ( $match['permalink'] ?? '' );
 	$is_link   = $args['link'] && '' !== $permalink && '' === $args['after'];
 	$status    = (string) ( $match['status'] ?? '' );
@@ -2023,6 +2024,9 @@ function render_match_card( $match, $args = array() ) {
 	}
 	if ( '' !== $status && 'scheduled' !== $status ) {
 		$html .= '<span class="leagueflow-calendar__event-status is-' . esc_attr( sanitize_html_class( $status ) ) . '">' . esc_html( (string) ( $match['status_label'] ?? $status ) ) . '</span>';
+	}
+	foreach ( (array) $args['badges'] as $badge ) {
+		$html .= '<span class="leagueflow-calendar__event-status ' . esc_attr( sanitize_html_class( (string) ( $badge[1] ?? '' ) ) ) . '">' . esc_html( (string) ( $badge[0] ?? '' ) ) . '</span>';
 	}
 	$html .= '</div>';
 	$html .= '<p class="leagueflow-calendar__event-teams"><span>' . esc_html( (string) ( $match['home_team'] ?? '' ) ) . '</span><strong class="leagueflow-calendar__event-score">' . esc_html( $score ) . '</strong><span>' . esc_html( (string) ( $match['away_team'] ?? '' ) ) . '</span></p>';

@@ -11,7 +11,7 @@ defined( 'ABSPATH' ) || exit;
 
 /**
  * One locked, transactional result writer shared by the Results screen,
- * scheduled publication and the WP-CLI backfill.
+ * the Referee desk, scheduled publication and the WP-CLI backfill.
  *
  * A result is public (counted in standings, shown on the site) once the match
  * status is Finished. A held result keeps its scores private: the match keeps
@@ -260,8 +260,14 @@ class Result_Service {
 		if ( 'lf_match' !== get_post_type( $match_id ) || in_array( get_post_status( $match_id ), array( 'trash', 'auto-draft' ), true ) ) {
 			return new \WP_Error( 'not_found', __( 'This match no longer exists.', 'leagueflow' ) );
 		}
-		if ( ! current_user_can( 'edit_post', $match_id ) ) {
+		// Staff edit the match; referees publish or save results from the Referee desk.
+		$editor = current_user_can( 'edit_post', $match_id );
+		if ( ! $editor && ! current_user_can( Referee::SCORE_CAP ) ) {
 			return new \WP_Error( 'forbidden', __( 'You cannot edit this match.', 'leagueflow' ) );
+		}
+		$denied = $editor ? null : Referee::score_error( $match_id, $mode );
+		if ( $denied ) {
+			return $denied;
 		}
 		if ( ! in_array( $mode, self::MODES, true ) ) {
 			return new \WP_Error( 'invalid_mode', __( 'Choose whether to publish, hold or schedule the result.', 'leagueflow' ) );
@@ -285,6 +291,10 @@ class Result_Service {
 			clean_post_cache( $match_id );
 			if ( isset( $args['state'] ) && ( ! is_string( $args['state'] ) || ! hash_equals( self::state_token( $match_id ), $args['state'] ) ) ) {
 				return new \WP_Error( 'stale', __( 'This match changed after the page loaded. Reload to see the latest result before saving.', 'leagueflow' ) );
+			}
+			$denied = $editor ? null : Referee::score_error( $match_id, $mode );
+			if ( $denied ) {
+				return $denied;
 			}
 			$status = (string) get_post_meta( $match_id, 'lf_status', true );
 			$status = isset( Match_Status::statuses()[ $status ] ) ? $status : 'scheduled';
@@ -341,6 +351,21 @@ class Result_Service {
 					return new \WP_Error( 'save_failed', __( 'The match status could not be saved. Nothing was changed; please try again.', 'leagueflow' ) );
 				}
 			}
+			// A referee's published result carries the evidence knockout advancement checks.
+			if ( ! $editor && 'finish' === $mode && ! add_post_meta(
+				$match_id,
+				Referee::AUDIT_META,
+				array(
+					'user_id'          => get_current_user_id(),
+					'submitted_at_utc' => gmdate( 'Y-m-d H:i:s' ),
+					'home_score'       => '' === $home ? '' : (string) (int) $home,
+					'away_score'       => '' === $away ? '' : (string) (int) $away,
+					'previous'         => $before,
+					'result_state'     => Referee::state_token( $match_id ),
+				)
+			) ) {
+				return new \WP_Error( 'save_failed', __( 'The result record could not be saved. Nothing was changed; please try again.', 'leagueflow' ) );
+			}
 			$logged = add_post_meta(
 				$match_id,
 				self::LOG_META,
@@ -378,6 +403,9 @@ class Result_Service {
 			wp_update_post( array( 'ID' => $match_id, 'post_status' => 'publish' ) );
 		}
 		do_action( 'leagueflow_match_result_saved', $match_id );
+		if ( ! $editor && 'finish' === $mode ) {
+			do_action( 'leagueflow_referee_result_submitted', $match_id, get_current_user_id() );
+		}
 		return true;
 	}
 

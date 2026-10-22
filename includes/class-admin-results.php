@@ -272,6 +272,9 @@ class Admin_Results {
 						<span class="leagueflow-result-card__flag"><?php esc_html_e( 'Fixture not public', 'leagueflow' ); ?></span>
 					<?php endif; ?>
 				</p>
+				<?php foreach ( Referee::conflict_messages( $id ) as $conflict ) : ?>
+					<p class="leagueflow-result-card__conflict"><strong><?php esc_html_e( 'Referee conflict:', 'leagueflow' ); ?></strong> <?php echo esc_html( $conflict ); ?></p>
+				<?php endforeach; ?>
 			</header>
 			<div class="leagueflow-result-card__score">
 				<label for="<?php echo esc_attr( $prefix ); ?>-home"><span><?php echo esc_html( $home ); ?></span>
@@ -304,6 +307,9 @@ class Admin_Results {
 				<?php
 				$user  = get_userdata( (int) ( $last['user_id'] ?? 0 ) );
 				$modes = array( 'finish' => __( 'Published', 'leagueflow' ), 'hold' => __( 'Saved without publishing', 'leagueflow' ), 'schedule' => __( 'Scheduled', 'leagueflow' ) );
+				if ( 'referee-desk' === ( $last['source'] ?? '' ) ) {
+					$modes = array( 'finish' => __( 'Published from the Referee desk', 'leagueflow' ), 'hold' => __( 'Sent from the Referee desk for review', 'leagueflow' ) );
+				}
 				$time  = strtotime( (string) ( $last['at_utc'] ?? '' ) . ' UTC' );
 				?>
 				<p class="leagueflow-result-card__history">

@@ -67,10 +67,10 @@ class Plugin {
 		$results      = new Result_Service();
 		$availability = new Availability();
 		$consent      = new Registration_Consent();
-		$referees     = new Referee();
 		$guide        = new Admin_Guide();
 
 		$this->renderer = new Renderer( $standings, $knockout, $sports );
+		$referees       = new Referee( $this->renderer, $results );
 
 		$seeder    = new Seeder();
 		$requests  = new Join_Request_Service();

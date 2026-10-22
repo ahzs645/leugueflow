@@ -140,6 +140,7 @@ class Assets {
 			'leagueflow_page_leagueflow-placements',
 			'leagueflow_page_leagueflow-requests',
 			'leagueflow_page_leagueflow-results',
+			'leagueflow_page_leagueflow-referee',
 			'leagueflow_page_leagueflow-setup',
 			'leagueflow_page_leagueflow-utilities',
 			'leagueflow_page_leagueflow-standings',
@@ -160,6 +161,11 @@ class Assets {
 		) {
 			wp_enqueue_style( 'leagueflow-admin' );
 			wp_enqueue_script( 'leagueflow-admin-ui' );
+		}
+
+		// Referees without staff access use the desk inside wp-admin too.
+		if ( 'toplevel_page_leagueflow-referee' === $screen->id ) {
+			wp_enqueue_style( 'leagueflow-frontend' );
 		}
 
 		// The Calendar Event poster field uses the media library.

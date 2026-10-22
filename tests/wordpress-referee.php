@@ -1,5 +1,5 @@
 <?php
-/** Assigned referee permissions, result concurrency, admin date validation and season form state. */
+/** Referee desk permissions and conflicts, result concurrency, admin date validation and season form state. */
 if ( ! defined( 'WP_CLI' ) || ! WP_CLI || '1' !== getenv( 'LEAGUEFLOW_DISPOSABLE_WP' ) || 'http://leagueflow.test' !== get_option( 'home' ) ) {
 	throw new RuntimeException( 'Run only on the disposable leagueflow.test site.' );
 }
@@ -46,96 +46,138 @@ try {
 	$q = $post( 'lf_player', 'Unassigned Secret Player', array( 'lf_email' => 'unassigned@example.test' ), 'private' );
 	\LeagueFlow\assign_player_to_team( $q, $secret );
 	$m = $post( 'lf_match', 'Assigned Match', array( 'lf_home_team_id' => $a, 'lf_away_team_id' => $b, 'lf_status' => 'scheduled', 'lf_match_datetime' => '2026-11-29 18:30' ) );
-	$n = $post( 'lf_match', 'Unassigned Match', array( 'lf_home_team_id' => $a, 'lf_away_team_id' => $secret, 'lf_status' => 'scheduled' ) );
+	$n = $post( 'lf_match', 'Unassigned Match', array( 'lf_home_team_id' => $a, 'lf_away_team_id' => $secret, 'lf_status' => 'scheduled', 'lf_match_datetime' => '2026-10-01 19:00' ) );
 	$service = new \LeagueFlow\Referee();
+	$token = static function( $id ) { return \LeagueFlow\Result_Service::state_token( $id ); };
 	add_post_meta( $m, \LeagueFlow\Referee::ASSIGNMENT_META, $ref );
-	update_post_meta( $m, \LeagueFlow\Referee::SCORE_META, 0 );
 
 	wp_set_current_user( $ref );
 	lfr_check( ! current_user_can( 'edit_posts' ) && ! current_user_can( 'edit_users' ) && ! current_user_can( 'edit_post', $m ), 'Referee has no general content or user editing capability.' );
-	lfr_check( \LeagueFlow\Referee::can_access( $m ), 'Assigned official can read rosters.' );
-	lfr_check( ! \LeagueFlow\Referee::can_access( $n ), 'Other matches are out of scope.' );
-	lfr_check( ! \LeagueFlow\Referee::can_access( $m, true ), 'Per-match roster-only assignment cannot submit scores.' );
+	lfr_check( \LeagueFlow\Referee::can_use_desk() && \LeagueFlow\Referee::can_access( $m ) && \LeagueFlow\Referee::can_access( $n ), 'A referee can open every published match, assigned or not.' );
+	lfr_check( \LeagueFlow\Referee::can_access( $m, true ) && \LeagueFlow\Referee::can_access( $n, true ), 'A referee can enter scores for any published match.' );
 	$_GET = array( 'lf_referee_match' => $m );
 	$html = $service->render();
-	lfr_check( false !== strpos( $html, 'Assigned Player' ) && false !== strpos( $html, '12' ), 'Assigned private roster is shown with playing details.' );
-	lfr_check( false === strpos( $html, 'secret-address@example.test' ) && false === strpos( $html, 'Unassigned Secret Player' ) && false === strpos( $html, 'unassigned@example.test' ), 'Referee page never exposes contact information or unrelated players.' );
-	$_GET = array( 'lf_referee_match' => $n ); $html = $service->render();
-	lfr_check( false === strpos( $html, 'Unassigned Secret Team' ) && false === strpos( $html, 'Unassigned Secret Player' ), 'Forged match ID reveals no roster or team details.' );
+	lfr_check( false !== strpos( $html, 'Assigned Player' ) && false !== strpos( $html, '12' ) && false !== strpos( $html, 'Forward' ), 'Private roster is shown with playing details.' );
+	lfr_check( false === strpos( $html, 'secret-address@example.test' ) && false === strpos( $html, 'unassigned@example.test' ), 'Referee pages never expose contact information.' );
+	$_GET = array( 'lf_referee_team' => $secret ); $html = $service->render();
+	lfr_check( false !== strpos( $html, 'Unassigned Secret Player' ) && false === strpos( $html, 'unassigned@example.test' ), 'Any published team roster opens on the desk without contact details.' );
+	$_GET = array( 'lf_ref_q' => 'Falcons' ); $html = $service->render();
+	lfr_check( false !== strpos( $html, 'Assigned Falcons' ) && false !== strpos( $html, 'lf_referee_match=' . $n ), 'Search finds teams and every matching game.' );
+	$_GET = array(); $html = $service->render();
+	lfr_check( false !== strpos( $html, 'Assigned to you' ) && false !== strpos( $html, 'lf_referee_match=' . $m ), 'The desk lists games assigned to the referee first.' );
 	$rest = rest_do_request( '/wp/v2/lf_player' );
 	lfr_check( 403 === $rest->get_status(), 'Referee cannot browse the full WordPress player REST directory.' );
-	$state = \LeagueFlow\Referee::state_token( $m );
-	lfr_check( is_wp_error( $service->submit_result( $m, '2', '1', $state ) ), 'Roster-only score write denied.' );
-	update_post_meta( $m, \LeagueFlow\Referee::SCORE_META, 1 );
-	$state = \LeagueFlow\Referee::state_token( $m );
-	lfr_check( \LeagueFlow\Referee::can_access( $m, true ), 'Enabled assigned referee can enter final scores.' );
 	foreach ( array( '', '-1', '1.2', '1e3', array( '2' ), true, (string) PHP_INT_MAX . '0' ) as $bad ) {
-		lfr_check( is_wp_error( $service->submit_result( $m, $bad, '1', $state ) ), 'Invalid score is rejected.' );
+		lfr_check( is_wp_error( $service->submit_result( $m, $bad, '1', $token( $m ) ) ), 'Invalid score is rejected.' );
 		lfr_check( ! metadata_exists( 'post', $m, 'lf_home_score' ), 'Invalid score attempt makes no writes.' );
 	}
-	wp_set_current_user( $other );
-	lfr_check( is_wp_error( $service->submit_result( $m, '2', '1', $state ) ), 'Unassigned referee denied even with a known token.' );
+	lfr_check( is_wp_error( $service->submit_result( $m, '2', '1', $token( $m ), 'schedule' ) ), 'Referees cannot schedule publication.' );
+	wp_set_current_user( $subscriber );
+	lfr_check( ! \LeagueFlow\Referee::can_use_desk() && ! \LeagueFlow\Referee::can_access( $m ) && is_wp_error( $service->submit_result( $m, '2', '1', $token( $m ) ) ), 'A player without the referee role is denied.' );
 	wp_set_current_user( 0 );
-	lfr_check( is_wp_error( $service->submit_result( $m, '2', '1', $state ) ), 'Anonymous score writes denied.' );
+	lfr_check( is_wp_error( $service->submit_result( $m, '2', '1', $token( $m ) ) ), 'Anonymous score writes denied.' );
 	wp_set_current_user( $ref );
+	$state = $token( $m );
 	update_post_meta( $m, 'lf_home_score', '1' );
 	$result = $service->submit_result( $m, '2', '1', $state );
 	lfr_check( is_wp_error( $result ) && 'stale' === $result->get_error_code() && '1' === get_post_meta( $m, 'lf_home_score', true ), 'Stale form cannot overwrite a newer score.' );
 	delete_post_meta( $m, 'lf_home_score' );
-	$state = \LeagueFlow\Referee::state_token( $m );
+	$state = $token( $m );
 	update_post_meta( $m, 'lf_match_datetime', '2026-12-07 18:30' );
 	$result = $service->submit_result( $m, '2', '1', $state );
 	lfr_check( is_wp_error( $result ) && 'stale' === $result->get_error_code(), 'Rescheduling invalidates the old score form.' );
-	$state = \LeagueFlow\Referee::state_token( $m );
 	$reject = static function( $check, $id, $key ) use ( $m ) { return $id === $m && 'lf_away_score' === $key ? false : $check; };
 	add_filter( 'add_post_metadata', $reject, 10, 3 );
-	$result = $service->submit_result( $m, '2', '1', $state );
+	$result = $service->submit_result( $m, '2', '1', $token( $m ) );
 	remove_filter( 'add_post_metadata', $reject, 10 );
 	lfr_check( is_wp_error( $result ) && 'save_failed' === $result->get_error_code(), 'A refused score write reports failure.' );
 	lfr_check( ! metadata_exists( 'post', $m, 'lf_home_score' ) && ! metadata_exists( 'post', $m, 'lf_away_score' ) && 'scheduled' === get_post_meta( $m, 'lf_status', true ) && ! get_post_meta( $m, \LeagueFlow\Referee::AUDIT_META, false ), 'Failed score write rolls back both scores, status and audit.' );
 	$reject_audit = static function( $check, $id, $key ) use ( $m ) { return $id === $m && \LeagueFlow\Referee::AUDIT_META === $key ? false : $check; };
 	add_filter( 'add_post_metadata', $reject_audit, 10, 3 );
-	$result = $service->submit_result( $m, '2', '1', $state );
+	$result = $service->submit_result( $m, '2', '1', $token( $m ) );
 	remove_filter( 'add_post_metadata', $reject_audit, 10 );
 	lfr_check( is_wp_error( $result ) && ! metadata_exists( 'post', $m, 'lf_home_score' ) && 'scheduled' === get_post_meta( $m, 'lf_status', true ), 'Failed audit write rolls back the result before Finished.' );
-	$state = \LeagueFlow\Referee::state_token( $m );
 	$peer = new wpdb( DB_USER, DB_PASSWORD, DB_NAME, DB_HOST );
 	$lock = \LeagueFlow\db_lock_name( 'result', (string) $m );
 	lfr_check( '1' === (string) $peer->get_var( $peer->prepare( 'SELECT GET_LOCK(%s, 0)', $lock ) ), 'Hold competing score lock from another connection.' );
-	$result = $service->submit_result( $m, '2', '1', $state );
+	$result = $service->submit_result( $m, '2', '1', $token( $m ) );
 	lfr_check( is_wp_error( $result ) && 'busy' === $result->get_error_code(), 'Concurrent score submission fails closed.' );
 	$peer->query( $peer->prepare( 'SELECT RELEASE_LOCK(%s)', $lock ) ); $peer->close();
+
+	// Save for staff: private until published.
+	lfr_check( true === $service->submit_result( $m, '3', '3', $token( $m ), 'hold' ), 'A referee can save a score for staff review.' );
+	lfr_check( 'held' === \LeagueFlow\Result_Service::stage( $m ) && 'scheduled' === get_post_meta( $m, 'lf_status', true ) && ! get_post_meta( $m, \LeagueFlow\Referee::AUDIT_META, false ), 'A saved referee score stays private and is not a published result.' );
+
+	// Publish.
 	$observed = array();
 	$observer = function( $id, $new ) use ( $m, &$observed ) { if ( $m === $id && 'finished' === $new ) { $observed = array( get_post_meta( $id, 'lf_home_score', true ), get_post_meta( $id, 'lf_away_score', true ), get_post_meta( $id, 'lf_outcome', true ) ); } };
 	add_action( 'leagueflow_match_status_changed', $observer, 10, 2 );
-	lfr_check( true === $service->submit_result( $m, '0', '0', $state ), 'Explicit 0–0 final result accepted.' );
+	lfr_check( true === $service->submit_result( $m, '0', '0', $token( $m ) ), 'Explicit 0–0 final result accepted.' );
 	remove_action( 'leagueflow_match_status_changed', $observer, 10 );
 	lfr_check( 'finished' === get_post_meta( $m, 'lf_status', true ) && array( '0', '0', '' ) === $observed, 'Lifecycle transition sees the complete final result.' );
 	$audit = get_post_meta( $m, \LeagueFlow\Referee::AUDIT_META, false );
-	lfr_check( 1 === count( $audit ) && $ref === $audit[0]['user_id'] && '0' === $audit[0]['home_score'] && ! empty( $audit[0]['submitted_at_utc'] ), 'Submission retains private referee/time/previous-result evidence.' );
-	lfr_check( is_wp_error( $service->submit_result( $m, '5', '0', \LeagueFlow\Referee::state_token( $m ) ) ) && '0' === get_post_meta( $m, 'lf_home_score', true ), 'Final scores cannot be overwritten by referees.' );
+	lfr_check( 1 === count( $audit ) && $ref === $audit[0]['user_id'] && '0' === $audit[0]['home_score'] && ! empty( $audit[0]['submitted_at_utc'] ), 'Publishing retains private referee/time/previous-result evidence.' );
+	$log = get_post_meta( $m, \LeagueFlow\Result_Service::LOG_META, false );
+	lfr_check( 'referee-desk' === end( $log )['source'] && $ref === end( $log )['user_id'], 'The result log names the Referee desk and the referee.' );
 	$rows = array_column( ( new \LeagueFlow\Standings_Service() )->get_rows( 0, 0, $lfr_term, 0 ), null, 'team_id' );
 	lfr_check( 1 === $rows[$a]['played'] && 1 === $rows[$a]['draws'], 'Referee score contributes to official standings.' );
-	foreach ( array( 'cancelled', 'postponed', 'finished' ) as $status ) {
+
+	// Corrections.
+	lfr_check( is_wp_error( $service->submit_result( $m, '0', '0', $token( $m ), 'hold' ) ) && 'finished' === get_post_meta( $m, 'lf_status', true ), 'A referee cannot take a published result off the site.' );
+	lfr_check( true === $service->submit_result( $m, '2', '0', $token( $m ) ) && '2' === get_post_meta( $m, 'lf_home_score', true ) && 'finished' === get_post_meta( $m, 'lf_status', true ), 'A referee can correct a published score.' );
+	foreach ( array( 'cancelled', 'postponed' ) as $status ) {
 		update_post_meta( $m, 'lf_status', $status );
-		lfr_check( ! \LeagueFlow\Referee::can_access( $m, true ), 'Closed status blocks score entry.' );
+		lfr_check( ! \LeagueFlow\Referee::can_access( $m, true ) && is_wp_error( $service->submit_result( $m, '1', '0', $token( $m ) ) ), 'Postponed and cancelled games block score entry.' );
 	}
-	update_post_meta( $m, 'lf_status', 'scheduled' );
+	update_post_meta( $m, 'lf_status', 'finished' );
+
+	// A referee who plays in the game is flagged and can only save for staff.
+	\LeagueFlow\Referee::flush_team_cache();
+	$own = $post( 'lf_player', 'Referee Who Plays', array( 'lf_user_id' => $ref ), 'private' );
+	\LeagueFlow\assign_player_to_team( $own, $b );
+	\LeagueFlow\Referee::flush_team_cache();
+	lfr_check( $b === \LeagueFlow\Referee::playing_team( $ref, $m ) && array( $ref => $b ) === \LeagueFlow\Referee::conflicts( $m ), 'An assigned referee on either roster is a conflict.' );
+	lfr_check( 1 === count( \LeagueFlow\Referee::conflict_messages( $m ) ) && false !== strpos( \LeagueFlow\Referee::conflict_messages( $m )[0], 'Assigned Bears' ), 'Staff see which team the referee plays for.' );
+	lfr_check( is_wp_error( $service->submit_result( $m, '5', '0', $token( $m ) ) ) && '2' === get_post_meta( $m, 'lf_home_score', true ), 'A playing referee cannot change a published result.' );
+	$own_game = $post( 'lf_match', 'Own Game', array( 'lf_home_team_id' => $b, 'lf_away_team_id' => $a, 'lf_status' => 'scheduled', 'lf_match_datetime' => '2026-10-01 18:30' ) );
+	lfr_check( is_wp_error( $service->submit_result( $own_game, '1', '0', $token( $own_game ) ) ) && 'scheduled' === get_post_meta( $own_game, 'lf_status', true ), 'A playing referee cannot publish their own game.' );
+	lfr_check( true === $service->submit_result( $own_game, '1', '0', $token( $own_game ), 'hold' ) && 'held' === \LeagueFlow\Result_Service::stage( $own_game ), 'A playing referee can save their own game for staff.' );
+	$_GET = array( 'lf_referee_match' => $own_game ); $html = $service->render();
+	lfr_check( false !== strpos( $html, 'You play for Assigned Bears' ) && false === strpos( $html, 'value="finish"' ) && false !== strpos( $html, 'value="hold"' ), 'The desk flags the game and offers only Save for staff.' );
+	lfr_check( 0 === \LeagueFlow\Referee::playing_team( $other, $own_game ) && \LeagueFlow\Referee::can_access( $own_game, true ), 'Other referees are not affected by the conflict.' );
+
+	// Dual role: a player account can also be a referee.
+	$dual = get_user_by( 'id', $subscriber );
+	$dual->add_role( \LeagueFlow\Referee::ROLE );
+	wp_set_current_user( $subscriber );
+	lfr_check( \LeagueFlow\is_participant_account( get_user_by( 'id', $subscriber ) ) && \LeagueFlow\Referee::can_use_desk() && \LeagueFlow\Referee::can_access( $n, true ), 'A player who is also a referee keeps participant status and gets the desk.' );
+	lfr_check( $a === \LeagueFlow\Referee::playing_team( $subscriber, $n ), 'The dual-role player is flagged in their own team’s games.' );
+	$dual->remove_role( \LeagueFlow\Referee::ROLE );
+
+	// Unpublished or protected records stay hidden.
 	wp_set_current_user( $lfr_admin_id ); wp_update_post( array( 'ID' => $a, 'post_password' => 'private' ) ); wp_set_current_user( $ref );
-	lfr_check( ! \LeagueFlow\Referee::can_access( $m ), 'Protected referenced team blocks access.' );
+	lfr_check( ! \LeagueFlow\Referee::can_access( $m ) && ! \LeagueFlow\Referee::can_view_team( $a ), 'Protected referenced team blocks access.' );
 	wp_set_current_user( $lfr_admin_id ); wp_update_post( array( 'ID' => $a, 'post_password' => '' ) ); wp_update_post( array( 'ID' => $m, 'post_status' => 'draft' ) ); wp_set_current_user( $ref );
-	lfr_check( ! \LeagueFlow\Referee::can_access( $m ), 'Unpublished assigned match is not exposed.' );
+	lfr_check( ! \LeagueFlow\Referee::can_access( $m ), 'Unpublished match is not exposed.' );
 	wp_set_current_user( $lfr_admin_id ); wp_update_post( array( 'ID' => $m, 'post_status' => 'publish' ) );
-	$_POST = array( 'leagueflow_referee_nonce' => 'invalid', 'lf_referee_user_ids' => array( $other ), 'lf_referee_scores_enabled' => '1' );
+
+	// Assignment is optional and staff-only.
+	$_POST = array( 'leagueflow_referee_nonce' => 'invalid', 'lf_referee_user_ids' => array( $other ) );
 	$service->save_assignments( $m, get_post( $m ) );
 	lfr_check( array( $ref ) === \LeagueFlow\Referee::assigned_users( $m ), 'Assignment update requires valid nonce.' );
 	$_POST['leagueflow_referee_nonce'] = wp_create_nonce( 'leagueflow_assign_referees_' . $m );
 	$_POST['lf_referee_user_ids'] = array( $subscriber ); $service->save_assignments( $m, get_post( $m ) );
 	lfr_check( array( $ref ) === \LeagueFlow\Referee::assigned_users( $m ), 'Participant cannot be assigned as referee without the capability.' );
 	$_POST['lf_referee_user_ids'] = array( $other ); $service->save_assignments( $m, get_post( $m ) );
-	lfr_check( array( $other ) === \LeagueFlow\Referee::assigned_users( $m ), 'Staff can reassign officials.' );
-	wp_set_current_user( $ref );
-	lfr_check( ! \LeagueFlow\Referee::can_access( $m ) && is_wp_error( $service->submit_result( $m, '1', '0', $state ) ), 'Revoked assignment immediately removes access.' );
+	lfr_check( array( $other ) === \LeagueFlow\Referee::assigned_users( $m ) && ! \LeagueFlow\Referee::conflicts( $m ), 'Staff can reassign officials; the conflict clears.' );
+	$_POST['lf_referee_user_ids'] = array(); $service->save_assignments( $m, get_post( $m ) );
+	lfr_check( array() === \LeagueFlow\Referee::assigned_users( $m ), 'Staff can leave a game without a referee.' );
+	$_POST = array();
+	$service->maybe_create_desk_page();
+	$desk = absint( get_option( \LeagueFlow\Referee::PAGE_OPTION ) );
+	lfr_check( $desk && 'publish' === get_post_status( $desk ) && get_permalink( $desk ) === \LeagueFlow\Referee::desk_url(), 'A front-end Referee desk page exists.' );
+	$service->maybe_create_desk_page();
+	lfr_check( $desk === absint( get_option( \LeagueFlow\Referee::PAGE_OPTION ) ), 'The desk page is created once.' );
 
 	// Drive real admin save callbacks for finalise and impossible event/date inputs.
 	wp_set_current_user( $lfr_admin_id );
@@ -151,11 +193,9 @@ try {
 	// and referees also compete for the same lock, including native post saves.
 	$_POST = array();
 	$admin_match = $post( 'lf_match', 'Admin concurrency match', array( 'lf_home_team_id' => $a, 'lf_away_team_id' => $b, 'lf_status' => 'scheduled', 'lf_match_datetime' => '2026-12-07 18:30', 'lf_venue' => 'Original court' ) );
-	add_post_meta( $admin_match, \LeagueFlow\Referee::ASSIGNMENT_META, $ref );
-	update_post_meta( $admin_match, \LeagueFlow\Referee::SCORE_META, 1 );
 	$admin_state = \LeagueFlow\Admin::match_form_state( $admin_match );
-	wp_set_current_user( $ref );
-	lfr_check( true === $service->submit_result( $admin_match, '4', '3', \LeagueFlow\Referee::state_token( $admin_match ) ), 'A referee can save while an older staff form remains open.' );
+	wp_set_current_user( $other );
+	lfr_check( true === $service->submit_result( $admin_match, '4', '3', \LeagueFlow\Result_Service::state_token( $admin_match ) ), 'A referee can save while an older staff form remains open.' );
 	$newer_audit = get_post_meta( $admin_match, \LeagueFlow\Referee::AUDIT_META, false );
 	wp_set_current_user( $lfr_admin_id );
 	$_POST = array( 'leagueflow_match_nonce' => wp_create_nonce( 'leagueflow_save_match' ), 'leagueflow_match_state' => $admin_state, 'lf_home_team_id' => $a, 'lf_away_team_id' => $b, 'lf_home_score' => '9', 'lf_away_score' => '8', 'lf_status' => 'finished', 'lf_match_datetime' => '2026-12-08T19:00', 'lf_venue' => 'Stale court' );

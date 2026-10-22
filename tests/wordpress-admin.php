@@ -527,7 +527,7 @@ global $menu, $submenu, $_registered_pages, $pagenow, $typenow, $taxnow;
 $menu = array(); $submenu = array();
 $admin->register_menus();
 $slugs = wp_list_pluck( $submenu['leagueflow'] ?? array(), 2 );
-lfa_check( array( 'leagueflow', 'leagueflow-setup', 'edit.php?post_type=lf_team', 'edit.php?post_type=lf_player', 'leagueflow-requests', 'edit.php?post_type=lf_match', 'leagueflow-fixtures', 'leagueflow-fields', 'edit.php?post_type=lf_calendar_event', 'leagueflow-standings', 'leagueflow-brackets', 'edit-tags.php?taxonomy=lf_competition&post_type=lf_match', 'edit-tags.php?taxonomy=lf_season&post_type=lf_match', 'edit-tags.php?taxonomy=lf_league_level&post_type=lf_match', 'leagueflow-sports', 'leagueflow-utilities', 'leagueflow-settings' ) === array_values( $slugs ), 'ADM-08 one LeagueFlow menu with 17 screens in workflow order' );
+lfa_check( array( 'leagueflow', 'leagueflow-setup', 'edit.php?post_type=lf_team', 'edit.php?post_type=lf_player', 'leagueflow-requests', 'edit.php?post_type=lf_match', 'leagueflow-results', 'leagueflow-fixtures', 'leagueflow-fields', 'edit.php?post_type=lf_calendar_event', 'leagueflow-standings', 'leagueflow-brackets', 'edit-tags.php?taxonomy=lf_competition&post_type=lf_match', 'edit-tags.php?taxonomy=lf_season&post_type=lf_match', 'edit-tags.php?taxonomy=lf_league_level&post_type=lf_match', 'leagueflow-sports', 'leagueflow-utilities', 'leagueflow-settings' ) === array_values( $slugs ), 'ADM-08 one LeagueFlow menu with 18 screens in workflow order' );
 lfa_check( 1 + count( $sports->get_enabled_sport_slugs() ) === count( array_filter( wp_list_pluck( $menu, 2 ), static function ( $slug ) { return 0 === strpos( (string) $slug, 'leagueflow' ); } ) ), 'ADM-08 each enabled sport has a top-level menu' );
 foreach ( $sports->get_enabled_sport_slugs() as $sport_slug ) {
 	$sport_links = wp_list_pluck( $submenu[ 'leagueflow-sport-' . $sport_slug ] ?? array(), 2 );
@@ -1436,7 +1436,7 @@ lfa_check( is_array( $wp_meta_boxes['lf_player']['side']['default']['tagsdiv-lf_
 $sport_tax = get_taxonomy( 'lf_sport' );
 lfa_check( false === $sport_tax->show_ui && false === $sport_tax->show_in_quick_edit && true === $sport_tax->show_admin_column && true === $sport_tax->show_in_rest, 'ADM-15 sport has no generic term screen, Quick Edit field or editor panel; list column and REST kept' );
 lfa_check( true === get_taxonomy( 'lf_league_level' )->show_ui, 'ADM-15 League Levels keep their admin screen' );
-lfa_check( use_block_editor_for_post_type( 'lf_calendar_event' ) && ! use_block_editor_for_post_type( 'lf_team' ) && ! use_block_editor_for_post_type( 'lf_match' ) && ! use_block_editor_for_post_type( 'lf_player' ), 'ADM-15 fixture: only calendar events use the block editor' );
+lfa_check( ! use_block_editor_for_post_type( 'lf_calendar_event' ) && ! use_block_editor_for_post_type( 'lf_team' ) && ! use_block_editor_for_post_type( 'lf_match' ) && ! use_block_editor_for_post_type( 'lf_player' ), 'ADM-15 fixture: every LeagueFlow record uses the classic editor' );
 foreach ( array( 'lf_team', 'lf_match', 'lf_calendar_event' ) as $type ) {
 	lfa_check( false === apply_filters( 'quick_edit_show_taxonomy', true, 'lf_league_level', $type ), "ADM-15 Quick Edit has no free-form League Levels field for $type" );
 }

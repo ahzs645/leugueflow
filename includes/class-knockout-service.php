@@ -488,7 +488,7 @@ class Knockout_Service {
 	}
 
 	protected function is_committed_referee_result( $match_id ) {
-		if ( ! current_user_can( Referee::SCORE_CAP ) || ! Referee::can_access( $match_id ) || '1' !== (string) get_post_meta( $match_id, Referee::SCORE_META, true )
+		if ( ! current_user_can( Referee::SCORE_CAP ) || ! Referee::can_access( $match_id, true )
 			|| 'finished' !== get_post_meta( $match_id, 'lf_status', true ) || get_post_meta( $match_id, 'lf_outcome', true ) || get_post_meta( $match_id, 'lf_winner_team_id', true ) ) { return false; }
 		$history = get_post_meta( $match_id, Referee::AUDIT_META, false );
 		$last = $history ? end( $history ) : null;

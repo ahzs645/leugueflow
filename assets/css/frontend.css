@@ -3732,3 +3732,404 @@ a.leagueflow-calendar__event.is-link:focus-visible {
 	padding-top: 0.6rem;
 	border-top: 1px solid var(--lf-border);
 }
+
+/*
+ * Referee desk. Games use the shared match card; badges mark the referee's
+ * own games (conflicts), assignments and games waiting for a score.
+ */
+.leagueflow-calendar__event-status.is-conflict {
+	background: var(--lf-danger);
+	color: var(--lf-danger-foreground);
+}
+
+.leagueflow-calendar__event-status.is-assigned {
+	background: var(--lf-primary);
+	color: var(--lf-primary-foreground);
+}
+
+.leagueflow-calendar__event-status.is-needs {
+	background: var(--lf-accent);
+	color: var(--lf-accent-foreground);
+}
+
+.leagueflow-calendar__event-status.is-held {
+	background: transparent;
+	box-shadow: inset 0 0 0 1px var(--lf-border-strong);
+}
+
+.leagueflow-referee {
+	display: grid;
+	gap: 1.5rem;
+	color: var(--lf-card-foreground);
+}
+
+.leagueflow-referee h2,
+.leagueflow-referee h3 {
+	margin: 0;
+	font-family: var(--lf-font-display);
+	text-transform: var(--lf-display-transform);
+}
+
+.leagueflow-referee__eyebrow {
+	margin: 0 0 0.25rem;
+	color: var(--lf-muted-foreground);
+	font-family: var(--lf-font-label);
+	font-size: 0.75rem;
+	font-weight: 700;
+	letter-spacing: var(--lf-label-tracking);
+	text-transform: var(--lf-label-transform);
+}
+
+.leagueflow-referee__header p:last-child {
+	margin: 0.4rem 0 0;
+	color: var(--lf-muted-foreground);
+}
+
+.leagueflow-referee__muted {
+	margin: 0;
+	color: var(--lf-muted-foreground);
+	font-size: 0.9rem;
+}
+
+.leagueflow-referee__back {
+	margin: 0;
+}
+
+.leagueflow-referee__back a,
+.leagueflow-referee__section-head a {
+	color: var(--lf-primary);
+	font-weight: 600;
+	text-decoration: none;
+}
+
+.leagueflow-referee__notice,
+.leagueflow-referee__flag {
+	margin: 0;
+	padding: 0.75rem 1rem;
+	border-left: 4px solid var(--lf-success);
+	border-radius: var(--lf-radius-sm);
+	background: var(--lf-muted);
+}
+
+.leagueflow-referee__notice.is-error,
+.leagueflow-referee__flag {
+	border-left-color: var(--lf-danger);
+}
+
+.leagueflow-referee__search {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-end;
+	gap: 0.75rem;
+	padding: var(--lf-card-pad);
+	border: 1px solid var(--lf-border);
+	border-radius: var(--lf-radius);
+	background: var(--lf-card);
+}
+
+.leagueflow-referee__field {
+	display: grid;
+	gap: 0.3rem;
+	min-width: 9rem;
+}
+
+.leagueflow-referee__field--grow {
+	flex: 1 1 14rem;
+}
+
+.leagueflow-referee__field > span {
+	color: var(--lf-muted-foreground);
+	font-size: 0.75rem;
+	font-weight: 700;
+	letter-spacing: var(--lf-label-tracking);
+	text-transform: var(--lf-label-transform);
+}
+
+.leagueflow-referee input[type="search"],
+.leagueflow-referee input[type="number"],
+.leagueflow-referee select {
+	box-sizing: border-box;
+	width: 100%;
+	min-height: 2.75rem;
+	padding: 0.5rem 0.75rem;
+	border: 1px solid var(--lf-border-strong);
+	border-radius: var(--lf-radius-sm);
+	background: var(--lf-card);
+	color: var(--lf-card-foreground);
+	font: inherit;
+}
+
+.leagueflow-referee__button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 2.75rem;
+	padding: 0.6rem 1.1rem;
+	border: 1px solid var(--lf-primary);
+	border-radius: var(--lf-radius-sm);
+	background: var(--lf-primary);
+	color: var(--lf-primary-foreground);
+	font: inherit;
+	font-weight: 700;
+	text-decoration: none;
+	cursor: pointer;
+}
+
+.leagueflow-referee__button.is-secondary {
+	background: transparent;
+	color: var(--lf-primary);
+}
+
+.leagueflow-referee a:focus-visible,
+.leagueflow-referee input:focus-visible,
+.leagueflow-referee select:focus-visible,
+.leagueflow-referee button:focus-visible {
+	outline: 3px solid var(--lf-ring);
+	outline-offset: 2px;
+}
+
+.leagueflow-referee__section {
+	display: grid;
+	gap: 0.75rem;
+}
+
+.leagueflow-referee__section-head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 0.5rem;
+}
+
+.leagueflow-referee__section-head > span {
+	color: var(--lf-muted-foreground);
+	font-size: 0.85rem;
+}
+
+.leagueflow-referee__chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.leagueflow-referee__chips a {
+	display: inline-flex;
+	gap: 0.4rem;
+	padding: 0.4rem 0.8rem;
+	border: 1px solid var(--lf-border);
+	border-radius: var(--lf-radius-pill);
+	background: var(--lf-card);
+	color: var(--lf-card-foreground);
+	font-weight: 600;
+	text-decoration: none;
+}
+
+.leagueflow-referee__chips span {
+	color: var(--lf-muted-foreground);
+	font-weight: 400;
+}
+
+.leagueflow-referee__pages {
+	display: flex;
+	justify-content: center;
+	gap: 1rem;
+}
+
+.leagueflow-referee__layout {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(16rem, 22rem);
+	align-items: start;
+	gap: 1.5rem;
+}
+
+.leagueflow-referee__rosters,
+.leagueflow-referee__team-games {
+	display: grid;
+	gap: 1.5rem;
+}
+
+.leagueflow-referee__score {
+	position: sticky;
+	top: 1rem;
+	display: grid;
+	gap: 0.75rem;
+	padding: var(--lf-card-pad);
+	border: 1px solid var(--lf-border);
+	border-radius: var(--lf-radius);
+	background: var(--lf-card);
+	box-shadow: var(--lf-shadow-sm);
+}
+
+.leagueflow-referee__form {
+	display: grid;
+	gap: 0.85rem;
+}
+
+.leagueflow-referee__scores {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+	align-items: end;
+	gap: 0.5rem;
+}
+
+.leagueflow-referee__scores > span {
+	padding-bottom: 0.65rem;
+	font-weight: 700;
+}
+
+.leagueflow-referee__scores label {
+	display: grid;
+	gap: 0.3rem;
+	min-width: 0;
+}
+
+.leagueflow-referee__scores label span {
+	overflow: hidden;
+	font-size: 0.85rem;
+	font-weight: 600;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.leagueflow-referee__scores input {
+	font-size: 1.4rem;
+	font-weight: 700;
+	text-align: center;
+}
+
+.leagueflow-referee__actions {
+	display: grid;
+	gap: 0.5rem;
+}
+
+.leagueflow-referee__score-now {
+	margin: 0;
+	font-size: 1.6rem;
+	font-weight: 700;
+}
+
+.leagueflow-referee__roster {
+	overflow: hidden;
+	border: 1px solid var(--lf-border);
+	border-radius: var(--lf-radius);
+	background: var(--lf-card);
+}
+
+.leagueflow-referee__roster > .leagueflow-referee__section-head {
+	padding: 0.75rem var(--lf-card-pad);
+	border-bottom: 1px solid var(--lf-border);
+	background: var(--lf-muted);
+}
+
+.leagueflow-referee__roster h3 a {
+	color: inherit;
+	text-decoration: none;
+}
+
+.leagueflow-referee__table {
+	width: 100%;
+	margin: 0;
+	border-collapse: collapse;
+	text-align: left;
+}
+
+.leagueflow-referee__table th,
+.leagueflow-referee__table td {
+	padding: 0.6rem var(--lf-card-pad);
+	border-bottom: 1px solid var(--lf-border);
+	vertical-align: middle;
+}
+
+.leagueflow-referee__table tbody tr:last-child > * {
+	border-bottom: 0;
+}
+
+.leagueflow-referee__table thead th {
+	color: var(--lf-muted-foreground);
+	font-size: 0.72rem;
+	letter-spacing: var(--lf-label-tracking);
+	text-transform: var(--lf-label-transform);
+}
+
+.leagueflow-referee__table tbody th {
+	font-weight: 600;
+}
+
+.leagueflow-referee__table .is-number {
+	width: 2.5rem;
+	color: var(--lf-muted-foreground);
+	font-variant-numeric: tabular-nums;
+}
+
+.leagueflow-referee__tag,
+.leagueflow-referee__waiver {
+	display: inline-block;
+	margin-left: 0.4rem;
+	padding: 0.05rem 0.45rem;
+	border-radius: var(--lf-radius-pill);
+	background: var(--lf-muted);
+	font-size: 0.7rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	vertical-align: 0.1em;
+}
+
+.leagueflow-referee__waiver {
+	margin-left: 0;
+}
+
+.leagueflow-referee__tag.is-conflict,
+.leagueflow-referee__waiver.is-missing {
+	background: var(--lf-danger);
+	color: var(--lf-danger-foreground);
+}
+
+.leagueflow-referee__waiver.is-ok {
+	background: var(--lf-success);
+	color: var(--lf-success-foreground);
+}
+
+.leagueflow-referee__empty {
+	display: grid;
+	justify-items: start;
+	gap: 0.75rem;
+	padding: 1.5rem;
+	border: 1px solid var(--lf-border);
+	border-radius: var(--lf-radius);
+	background: var(--lf-card);
+}
+
+.leagueflow-referee__empty p {
+	margin: 0;
+}
+
+@media (max-width: 860px) {
+	.leagueflow-referee__layout {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	/* On phones the score form comes first: it is what the referee came for. */
+	.leagueflow-referee__score {
+		position: static;
+		order: -1;
+	}
+}
+
+@media (max-width: 520px) {
+	.leagueflow-referee__table th,
+	.leagueflow-referee__table td {
+		padding-inline: 0.65rem;
+	}
+
+	.leagueflow-referee__field {
+		flex: 1 1 calc(50% - 0.5rem);
+		min-width: 0;
+	}
+
+	.leagueflow-referee__search .leagueflow-referee__button {
+		flex: 1 1 100%;
+	}
+}
