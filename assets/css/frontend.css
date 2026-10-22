@@ -91,12 +91,78 @@
 	font-size: 1.05rem;
 }
 
-.leagueflow-table__team,
+/* Table cells stay table cells, so every row's line is continuous; the team
+   logo and name are laid out inside the cell instead. */
+.leagueflow-table__team-inner,
 .leagueflow-match-row__teams,
 .leagueflow-match-card__team {
 	display: flex;
 	align-items: center;
 	gap: 0.75rem;
+	min-width: 0;
+}
+
+.leagueflow-table__team {
+	width: 100%;
+	min-width: 8rem;
+}
+
+.leagueflow-table__team-inner > :last-child {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+.leagueflow-table__logo-wrap {
+	flex: none;
+	display: inline-flex;
+}
+
+.leagueflow-table .is-number {
+	text-align: center;
+	white-space: nowrap;
+}
+
+.leagueflow-table__col--pos {
+	width: 2.5rem;
+	color: var(--lf-muted-foreground);
+}
+
+.leagueflow-table__col--points {
+	text-align: right !important;
+}
+
+.leagueflow-table abbr[title] {
+	border: 0;
+	text-decoration: none;
+	cursor: help;
+}
+
+/* Small screens keep position, team, record and points; for/against go
+   first, then the difference. Columns are chosen by name, not position. */
+@media (max-width: 760px) {
+	.leagueflow-table .is-detail {
+		display: none;
+	}
+
+	.leagueflow-table th,
+	.leagueflow-table td {
+		padding: 0.6rem 0.45rem;
+	}
+
+	.leagueflow-table__team {
+		min-width: 0;
+	}
+}
+
+@media (max-width: 420px) {
+	.leagueflow-table .is-diff {
+		display: none;
+	}
+
+	.leagueflow-table__logo-wrap img {
+		width: 26px;
+		height: 26px;
+	}
 }
 
 .leagueflow-table__team a {
@@ -3640,3 +3706,29 @@ body:not(.home) .unbc-page-body > .wp-block-post-content > .leagueflow-portal.al
 	border: 1px solid var(--lf-border);
 }
 
+
+/*
+ * Match lists, team pages and the player portal use the calendar's event
+ * card (render_match_card()), so a match looks the same everywhere.
+ */
+.leagueflow-match-stack > .leagueflow-calendar__event {
+	margin: 0;
+}
+
+a.leagueflow-calendar__event.is-link,
+a.leagueflow-calendar__event.is-link:visited {
+	color: var(--lf-card-foreground);
+	text-decoration: none;
+}
+
+a.leagueflow-calendar__event.is-link:hover,
+a.leagueflow-calendar__event.is-link:focus-visible {
+	border-color: var(--lf-cal-accent, var(--lf-primary));
+	box-shadow: var(--lf-shadow);
+}
+
+.leagueflow-calendar__event .leagueflow-rsvp {
+	margin-top: 0.6rem;
+	padding-top: 0.6rem;
+	border-top: 1px solid var(--lf-border);
+}

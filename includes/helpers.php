@@ -1946,3 +1946,93 @@ function object_term_saved( $object_id, $term_id, $taxonomy ) {
 
 	return ! is_wp_error( $ids ) && in_array( (int) $term_id, array_map( 'intval', (array) $ids ), true );
 }
+
+/**
+ * Accent colour for a sport: the same colours the calendar uses.
+ *
+ * @param string $sport_slug Sport slug.
+ * @return string
+ */
+function sport_accent_color( $sport_slug ) {
+	$colors = apply_filters(
+		'leagueflow_calendar_sport_colors',
+		array(
+			'soccer'            => '#2e7d4f',
+			'basketball'        => '#c2571f',
+			'volleyball'        => '#b08c2e',
+			'hockey'            => '#2b5d8a',
+			'baseball'          => '#8a3b3b',
+			'american-football' => '#6b4f2e',
+			'cricket'           => '#3f7a7a',
+			'rugby'             => '#7a3b5e',
+		)
+	);
+	$color = isset( $colors[ $sport_slug ] ) ? (string) $colors[ $sport_slug ] : '';
+	return preg_match( '/^#[0-9a-f]{3,8}$/i', $color ) ? $color : '';
+}
+
+/**
+ * One match as the shared event card, the same design the calendar uses:
+ * accent pill, sport / level / round / date line, teams with the score
+ * between them, then the result note and venue.
+ *
+ * @param array<string, mixed> $match Mapped match item (Renderer::map_match_item keys).
+ * @param array<string, mixed> $args {
+ *     @type bool   $link      Make the whole card a link to the match page. Default true.
+ *     @type bool   $show_date Show the date as well as the time. Default true.
+ *     @type string $after     Trusted HTML appended inside a card that is not a link (e.g. a form).
+ * }
+ * @return string
+ */
+function render_match_card( $match, $args = array() ) {
+	$args      = array_merge( array( 'link' => true, 'show_date' => true, 'after' => '' ), $args );
+	$permalink = (string) ( $match['permalink'] ?? '' );
+	$is_link   = $args['link'] && '' !== $permalink && '' === $args['after'];
+	$status    = (string) ( $match['status'] ?? '' );
+	$raw       = (string) ( $match['datetime_raw'] ?? '' );
+	$when      = '';
+	if ( '' !== $raw ) {
+		try {
+			$date = new \DateTimeImmutable( $raw, wp_timezone() );
+			$time = wp_date( (string) get_option( 'time_format', 'g:i a' ), $date->getTimestamp(), wp_timezone() );
+			/* translators: date format for match cards, e.g. Fri, Oct 23 */
+			$when = $args['show_date'] ? wp_date( __( 'D, M j', 'leagueflow' ), $date->getTimestamp(), wp_timezone() ) . ' · ' . $time : $time;
+		} catch ( \Exception $error ) {
+			$when = (string) ( $match['datetime'] ?? '' );
+		}
+	}
+	$score = ! empty( $match['scoreline'] ) ? (string) $match['scoreline'] : ( ! empty( $match['result_label'] ) ? '—' : __( 'vs', 'leagueflow' ) );
+	$color = sport_accent_color( (string) ( $match['sport_slug'] ?? '' ) );
+	$tag   = $is_link ? 'a' : 'article';
+
+	$html  = '<' . $tag . ' class="leagueflow-calendar__event leagueflow-match-card-row' . ( $is_link ? ' is-link' : '' ) . '"';
+	$html .= $is_link ? ' href="' . esc_url( $permalink ) . '"' : '';
+	$html .= $color ? ' style="--lf-cal-accent: ' . esc_attr( $color ) . ';"' : '';
+	$html .= '>';
+	$html .= '<div class="leagueflow-calendar__event-top">';
+	if ( ! empty( $match['sport_label'] ) ) {
+		$html .= '<span class="leagueflow-calendar__event-sport"><span class="leagueflow-calendar__event-dot"></span>' . esc_html( (string) $match['sport_label'] ) . '</span>';
+	}
+	foreach ( array( 'league_level_label', 'round_label' ) as $key ) {
+		if ( ! empty( $match[ $key ] ) ) {
+			$html .= '<span class="leagueflow-calendar__event-type">' . esc_html( (string) $match[ $key ] ) . '</span>';
+		}
+	}
+	if ( '' !== $when ) {
+		$html .= '<time class="leagueflow-calendar__event-time" datetime="' . esc_attr( $raw ) . '">' . esc_html( $when ) . '</time>';
+	}
+	if ( '' !== $status && 'scheduled' !== $status ) {
+		$html .= '<span class="leagueflow-calendar__event-status is-' . esc_attr( sanitize_html_class( $status ) ) . '">' . esc_html( (string) ( $match['status_label'] ?? $status ) ) . '</span>';
+	}
+	$html .= '</div>';
+	$html .= '<p class="leagueflow-calendar__event-teams"><span>' . esc_html( (string) ( $match['home_team'] ?? '' ) ) . '</span><strong class="leagueflow-calendar__event-score">' . esc_html( $score ) . '</strong><span>' . esc_html( (string) ( $match['away_team'] ?? '' ) ) . '</span></p>';
+	if ( ! empty( $match['result_label'] ) ) {
+		$html .= '<p class="leagueflow-calendar__event-result">' . esc_html( (string) $match['result_label'] ) . '</p>';
+	}
+	if ( ! empty( $match['venue'] ) ) {
+		$html .= '<p class="leagueflow-calendar__event-meta">' . esc_html( (string) $match['venue'] ) . '</p>';
+	}
+	$html .= $is_link ? '' : (string) $args['after'];
+	$html .= '</' . $tag . '>';
+	return $html;
+}

@@ -103,30 +103,23 @@ $wrapper_attributes = 'leagueflow/match-calendar' === ( \WP_Block_Supports::$blo
 			<p><?php esc_html_e( 'The interactive calendar needs JavaScript. The first page of the initial date range is listed below. Enable JavaScript to change dates, filter, and load additional events.', 'leagueflow' ); ?></p>
 			<div class="leagueflow-match-stack">
 				<?php foreach ( $items as $item ) : ?>
-					<article class="leagueflow-match-row">
-						<header class="leagueflow-match-row__header">
-							<div>
-								<?php if ( ! empty( $item['sportLabel'] ) ) : ?><span class="leagueflow-badge"><?php echo esc_html( $item['sportLabel'] ); ?></span><?php endif; ?>
-								<strong><?php echo esc_html( $item['statusLabel'] ); ?></strong>
-							</div>
-							<time datetime="<?php echo esc_attr( $item['start'] ); ?>"><?php echo esc_html( $item['day'] . ' ' . $item['time'] ); ?></time>
-						</header>
-						<div class="leagueflow-match-row__body">
-							<?php if ( 'match' === $item['source'] ) : ?>
-								<div class="leagueflow-match-row__teams">
-									<span><?php echo esc_html( $item['home'] ); ?></span>
-									<?php if ( ! empty( $item['scoreline'] ) ) : ?>
-										<strong class="leagueflow-match-row__score"><?php echo esc_html( $item['scoreline'] ); ?></strong>
-									<?php else : ?>
-										<span class="leagueflow-match-row__score"><?php esc_html_e( 'vs', 'leagueflow' ); ?></span>
-									<?php endif; ?>
-									<span><?php echo esc_html( $item['away'] ); ?></span>
-								</div>
-							<?php else : ?>
-								<strong><?php echo esc_html( $item['title'] ); ?></strong>
-							<?php endif; ?>
-						</div>
-					</article>
+					<?php
+					if ( 'match' === $item['source'] ) {
+						echo \LeagueFlow\render_match_card( // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped by render_match_card().
+							array(
+								'permalink' => $item['url'] ?? '', 'status' => $item['status'] ?? '', 'status_label' => $item['statusLabel'] ?? '',
+								'datetime_raw' => isset( $item['startTimestamp'] ) ? wp_date( 'Y-m-d H:i', (int) $item['startTimestamp'], wp_timezone() ) : '',
+								'sport_slug' => $item['sport'] ?? '', 'sport_label' => $item['sportLabel'] ?? '', 'league_level_label' => $item['leagueLevelLabel'] ?? '',
+								'home_team' => $item['home'] ?? '', 'away_team' => $item['away'] ?? '', 'scoreline' => $item['scoreline'] ?? '',
+								'result_label' => $item['resultLabel'] ?? '', 'venue' => $item['venue'] ?? '',
+							)
+						);
+					} else {
+						?>
+						<a class="leagueflow-calendar__event is-link" href="<?php echo esc_url( $item['url'] ?? '' ); ?>"><div class="leagueflow-calendar__event-top"><span class="leagueflow-calendar__event-sport"><?php echo esc_html( $item['sportLabel'] ?? '' ); ?></span><span class="leagueflow-calendar__event-time"><?php echo esc_html( $item['day'] . ' ' . $item['time'] ); ?></span></div><p class="leagueflow-calendar__event-title"><?php echo esc_html( $item['title'] ); ?></p></a>
+						<?php
+					}
+					?>
 				<?php endforeach; ?>
 			</div>
 		</div>

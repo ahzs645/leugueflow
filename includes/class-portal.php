@@ -3890,18 +3890,7 @@ class Portal {
 		?>
 		<div class="leagueflow-match-stack leagueflow-portal-matches">
 			<?php foreach ( $matches as $match ) : ?>
-				<article class="leagueflow-match-row">
-					<header class="leagueflow-match-row__header">
-						<strong><?php echo esc_html( $match['sport_label'] ); ?></strong>
-						<?php if ( ! empty( $match['datetime'] ) ) : ?><time datetime="<?php echo esc_attr( $match['datetime_raw'] ); ?>"><?php echo esc_html( $match['datetime'] ); ?></time><?php endif; ?>
-					</header>
-					<div class="leagueflow-match-row__teams">
-						<span><?php echo esc_html( $match['home_team'] ); ?></span>
-						<span class="leagueflow-match-row__score"><?php esc_html_e( 'vs', 'leagueflow' ); ?></span>
-						<span><?php echo esc_html( $match['away_team'] ); ?></span>
-					</div>
-					<?php if ( ! empty( $match['venue'] ) ) : ?><p class="leagueflow-match-row__venue"><?php echo esc_html( $match['venue'] ); ?></p><?php endif; ?>
-				</article>
+				<?php echo render_match_card( $match ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped by render_match_card(). ?>
 			<?php endforeach; ?>
 		</div>
 		<?php
@@ -4019,17 +4008,7 @@ class Portal {
 		<div class="leagueflow-match-stack leagueflow-portal-matches">
 			<?php foreach ( $matches as $match ) : ?>
 				<?php $current = isset( $statuses[ (int) $match['id'] ] ) ? $statuses[ (int) $match['id'] ] : ''; ?>
-				<article class="leagueflow-match-row">
-					<header class="leagueflow-match-row__header">
-						<strong><?php echo esc_html( $match['sport_label'] ); ?></strong>
-						<?php if ( ! empty( $match['datetime'] ) ) : ?><time datetime="<?php echo esc_attr( $match['datetime_raw'] ); ?>"><?php echo esc_html( $match['datetime'] ); ?></time><?php endif; ?>
-					</header>
-					<div class="leagueflow-match-row__teams">
-						<span><?php echo esc_html( $match['home_team'] ); ?></span>
-						<span class="leagueflow-match-row__score"><?php esc_html_e( 'vs', 'leagueflow' ); ?></span>
-						<span><?php echo esc_html( $match['away_team'] ); ?></span>
-					</div>
-					<?php if ( ! empty( $match['venue'] ) ) : ?><p class="leagueflow-match-row__venue"><?php echo esc_html( $match['venue'] ); ?></p><?php endif; ?>
+				<?php ob_start(); ?>
 					<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" class="leagueflow-rsvp">
 						<?php echo $this->render_hidden_fields( 'set_availability' ); ?>
 						<input type="hidden" name="lf_match_id" value="<?php echo esc_attr( (string) $match['id'] ); ?>" />
@@ -4042,7 +4021,7 @@ class Portal {
 							<?php endforeach; ?>
 						</span>
 					</form>
-				</article>
+				<?php echo render_match_card( $match, array( 'after' => (string) ob_get_clean() ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped by render_match_card(); the form is built above. ?>
 			<?php endforeach; ?>
 		</div>
 		<?php

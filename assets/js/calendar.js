@@ -443,7 +443,9 @@
 
 			if ( state.selectedDay ) {
 				panelTitle.textContent = sprintf( strings.eventsOn || 'Schedule on %s', formatDateKey( state.selectedDay, monthNames, weekdays ) );
-				clearBtn.hidden = 'sidebar' !== monthDisplay && 'month' === state.view;
+				// The month view has no separate deselect control: selecting the day
+				// again returns the panel to the whole month (desktop only).
+				clearBtn.hidden = 'month' === state.view;
 
 				var selectedItems = eventsForDay( state.selectedDay, source );
 				setPanelCount( selectedItems.length );
@@ -546,7 +548,8 @@
 
 				day.addEventListener( 'click', function () {
 					state.fullMonth = false;
-					state.selectedDay = state.selectedDay === this.dataset.day ? null : this.dataset.day;
+					// Phones always show one selected day under the compact month.
+					state.selectedDay = state.selectedDay === this.dataset.day && ! isMobileCalendar() ? null : this.dataset.day;
 					var tappedDay = this.dataset.day;
 					state.date = parseDay( tappedDay );
 					render();

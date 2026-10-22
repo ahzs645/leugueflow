@@ -57,6 +57,9 @@ const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); if (!c) fail = 
   ok(d.querySelectorAll('[data-calendar-events] .leagueflow-calendar__event').length === 2 && count.textContent === '2 events', 'selected day lists its two games with a "2 events" pill');
   ok(d.activeElement === d.querySelector('[data-day="2026-10-15"]'), 'focus stays on the tapped day');
   ok(d.querySelectorAll('[data-calendar-panel-count]').length === 1, 'the panel count pill is created once');
+  ok(d.querySelector('[data-calendar-clear]').hidden, 'the month view has no "Show full month" deselect button');
+  d.querySelector('[data-day="2026-10-15"]').click();
+  ok(d.querySelector('[data-day="2026-10-15"]').classList.contains('is-selected') && !d.querySelector('[data-day="2026-10-13"]').classList.contains('is-selected'), 'tapping the selected day on a phone keeps it selected');
   d.querySelector('[data-calendar-view="week"]').click();
   ok(root.classList.contains('is-view-month') && !root.classList.contains('is-view-week'), 'week view falls back to month on phones');
 
@@ -77,5 +80,9 @@ const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); if (!c) fail = 
   ok(dd.querySelector('[data-calendar-panel-count]').textContent === '4 events', 'desktop sidebar shows the month count pill: ' + dd.querySelector('[data-calendar-panel-count]').textContent);
   const pill = dd.querySelector('[data-day="2026-10-15"] .leagueflow-calendar__day-event');
   ok(pill && /Charlie vs Delta/.test(pill.textContent), 'desktop day cell lists event text');
+  dd.querySelector('[data-day="2026-10-15"]').click();
+  ok(dd.querySelector('[data-calendar-panel-count]').textContent === '2 events' && dd.querySelector('[data-calendar-clear]').hidden, 'desktop: selecting a day filters the sidebar without a deselect button');
+  dd.querySelector('[data-day="2026-10-15"]').click();
+  ok(!dd.querySelector('[data-day="2026-10-15"]').classList.contains('is-selected') && dd.querySelector('[data-calendar-panel-count]').textContent === '4 events', 'desktop: selecting the day again returns the sidebar to the whole month');
   process.exit(fail);
 })().catch(e => { console.error(e); process.exit(1); });

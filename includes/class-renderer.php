@@ -1501,6 +1501,17 @@ class Renderer {
 			);
 		}
 
+		// Games already played, newest first (e.g. latest results).
+		if ( 'recent' === $filters['period'] ) {
+			$meta_query[] = array(
+				'key' => 'lf_match_datetime',
+				'value' => current_datetime()->format( 'Y-m-d H:i' ),
+				'compare' => '<',
+				'type' => 'DATETIME',
+			);
+			$args['order'] = 'DESC';
+		}
+
 		if ( null !== $filters['include_knockout'] ) {
 			if ( $filters['include_knockout'] ) {
 				$meta_query[] = array(
