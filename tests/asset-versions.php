@@ -14,7 +14,7 @@ namespace {
 	$repo = $argv[1] ?? dirname( __DIR__ );
 	// Work on a disposable copy of the three assets so the repository is never touched.
 	$tmp = sys_get_temp_dir() . '/lf-asset-versions-' . getmypid() . '/';
-	$all = array( 'assets/css/frontend.css', 'assets/js/calendar.js', 'assets/js/portal.js', 'assets/css/admin.css', 'assets/css/editor.css', 'assets/js/blocks.js', 'assets/js/admin.js' );
+	$all = array( 'assets/css/design-tokens.css', 'assets/css/frontend.css', 'assets/js/calendar.js', 'assets/js/portal.js', 'assets/css/admin.css', 'assets/css/editor.css', 'assets/js/blocks.js', 'assets/js/admin.js' );
 	foreach ( $all as $rel ) {
 		@mkdir( dirname( $tmp . $rel ), 0700, true );
 		copy( $repo . '/' . $rel, $tmp . $rel );
@@ -28,7 +28,7 @@ namespace {
 	$versions = function () use ( $assets ) { $GLOBALS['lf_assets'] = array(); $assets->register_assets(); clearstatcache(); return $GLOBALS['lf_assets']; };
 
 	$before = $versions();
-	$handles = array( 'leagueflow-frontend' => 'assets/css/frontend.css', 'leagueflow-calendar' => 'assets/js/calendar.js', 'leagueflow-portal' => 'assets/js/portal.js', 'leagueflow-admin' => 'assets/css/admin.css', 'leagueflow-editor' => 'assets/css/editor.css', 'leagueflow-blocks' => 'assets/js/blocks.js', 'leagueflow-admin-ui' => 'assets/js/admin.js' );
+	$handles = array( 'leagueflow-tokens' => 'assets/css/design-tokens.css', 'leagueflow-frontend' => 'assets/css/frontend.css', 'leagueflow-calendar' => 'assets/js/calendar.js', 'leagueflow-portal' => 'assets/js/portal.js', 'leagueflow-admin' => 'assets/css/admin.css', 'leagueflow-editor' => 'assets/css/editor.css', 'leagueflow-blocks' => 'assets/js/blocks.js', 'leagueflow-admin-ui' => 'assets/js/admin.js' );
 	foreach ( $handles as $h => $rel ) {
 		$check( 0 === strpos( (string) $before[ $h ], LEAGUEFLOW_VERSION . '-' ), "$h key starts with the plugin version: " . $before[ $h ] );
 		$check( false !== strpos( (string) $before[ $h ], substr( md5_file( $tmp . $rel ), 0, 12 ) ), "$h key carries the content hash" );

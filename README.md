@@ -311,6 +311,20 @@ record's sport. Enabled sports also have shortcuts to the shared screens.
 
 All blocks are dynamic server-side blocks and inherit the classic frontend styling from the plugin. League table, team list, match list, calendar, and knockout bracket blocks support `sport` and `league_level` attributes so editors can target a specific sport module and level. Sport Standings displays enabled sports split by league level as expandable standings panels.
 
+### Theming
+
+`assets/css/design-tokens.css` defines one semantic token set (`--lf-card`,
+`--lf-muted`, `--lf-primary`, `--lf-accent`, `--lf-border`, `--lf-radius`,
+`--lf-shadow-*`, `--lf-font-display`/`-label`, …) with zero-specificity
+`:where(.leagueflow)` defaults. Every front-end view and the editor preview read
+only these tokens, so a theme sets brand values on `.leagueflow` (or a wrapper)
+without `!important` or stylesheet-order tricks. Layout follows CampusManager's
+calendar: card shells, a muted pill-tab track, event cards with a rounded accent
+pill in the sport colour, list dates with a hairline and a count pill, and on
+phones a compact number grid with dots whose selected day's events form the
+month card's footer. The older `--leagueflow-*` names still resolve to the new
+tokens for existing custom CSS.
+
 ## Shortcodes
 
 - `[league_table competition="spring-league" season="2026-spring" sport="soccer" league_level="recreational"]`
