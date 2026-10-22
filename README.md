@@ -2,6 +2,17 @@
 
 LeagueFlow is a classic WordPress plugin for running multi-sport leagues with teams, players, fixtures, derived standings, and knockout brackets. It uses WordPress-native admin screens, metaboxes, taxonomies, dynamic Gutenberg blocks, and shortcodes.
 
+## Results workflow and calendar layout (1.2.0)
+
+**LeagueFlow → Results** lists played games by stage: needs a score, saved but not
+published, scheduled, needs review and published. Enter a score or forfeit, then
+publish it, save it without publishing, or schedule it. Only published (Finished)
+results show on the site and count in the standings. `wp leagueflow results
+finish-scored` publishes scored matches that were never finished. The calendar and
+league views use CampusManager's layout with theme-supplied design tokens; on phones
+the month is a compact grid with the selected day's games below. See
+[release notes](releases/1.2.0.md).
+
 ## Scoring and admin workflow fixes (1.1.1)
 
 Saving both valid scores on a **Scheduled** match now marks it **Finished** and
