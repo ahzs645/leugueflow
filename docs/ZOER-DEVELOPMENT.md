@@ -3,8 +3,8 @@
 Clone `https://github.com/ahzs645/leugueflow.git` in **Repos**. For an existing
 local installation, open **WordPress → local site → Plugins → Leagueflow →
 Development**, select that repository, and save a link to the installed
-`leagueflow` folder. This development mirror retains the upstream release updater
-at `amirrad98/intramurals`; linking a development repository does not change the
+`leagueflow` folder. The plugin's updater (`Update URI`) and release builds use
+`ahzs645/leugueflow`; linking a development repository does not change that
 public update feed.
 
 ## Build and local update
