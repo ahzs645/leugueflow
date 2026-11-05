@@ -2,6 +2,14 @@
 
 LeagueFlow is a classic WordPress plugin for running multi-sport leagues with teams, players, fixtures, derived standings, and knockout brackets. It uses WordPress-native admin screens, metaboxes, taxonomies, dynamic Gutenberg blocks, and shortcodes.
 
+## Drop-in activities and Referee desk (1.2.1)
+
+Calendar Events can be set to **Drop-in (all sports)**, which saves an unscoped
+drop-in that shows on the all-sports calendar and the Drop-in event-type filter
+instead of under a single sport. Referees get a front-end **Referee desk** to find
+any published game, view both rosters and publish or save scores; a referee who plays
+in a game can only save it for staff. See [release notes](releases/1.2.1.md).
+
 ## Results workflow and calendar layout (1.2.0)
 
 **LeagueFlow → Results** lists played games by stage: needs a score, saved but not
